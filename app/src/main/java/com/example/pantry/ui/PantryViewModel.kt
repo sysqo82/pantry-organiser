@@ -325,9 +325,13 @@ class PantryViewModel(
             // Re-evaluate tracking type on scan in case heuristic improved
             var updatedItem = item
             val nameLower = item.name.lowercase()
-            val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil")
+            val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
+            val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
             
-            if (item.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+            if (item.trackingType == TrackingType.DISCRETE_COUNT && 
+                stapleKeywords.any { nameLower.contains(it) } &&
+                discreteKeywords.none { nameLower.contains(it) }
+            ) {
                 updatedItem = item.copy(trackingType = TrackingType.BULK_LEVEL)
                 repository.updateItem(updatedItem)
                 android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to Staple mode")

@@ -75,7 +75,12 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     // Hard-enforce staple tracking type before sending to PB
     val nameLower = name.lowercase()
     val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-    val enforcedTrackingType = if (trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+    val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
+    
+    val enforcedTrackingType = if (trackingType == TrackingType.DISCRETE_COUNT && 
+        stapleKeywords.any { nameLower.contains(it) } && 
+        discreteKeywords.none { nameLower.contains(it) }
+    ) {
         TrackingType.BULK_LEVEL
     } else {
         trackingType
