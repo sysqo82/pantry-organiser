@@ -189,6 +189,12 @@ class PantryRepository(
     private suspend fun mergeAndInsert(remoteItem: PantryItem) {
         val existing = pantryDao.getItemById(remoteItem.id)
         
+        // Prevent overwriting if local item was just updated (within 2 seconds) and server is older
+        if (existing != null && existing.updatedAt > remoteItem.updatedAt && (System.currentTimeMillis() - existing.updatedAt < 2000)) {
+            android.util.Log.d("PantryRepository", "Ignoring remote update for ${remoteItem.id} (Local is fresher)")
+            return
+        }
+
         // Sanitize existing local URI to prevent preserving stale /cache/ paths
         val sanitizedExistingUri = existing?.localImageUri?.takeIf {
             it.isNotBlank() && !it.contains("/cache/") && File(it).exists()
@@ -198,7 +204,7 @@ class PantryRepository(
             android.util.Log.d("PantryRepository", "Merging remote item ${remoteItem.id}, PRESERVING local image: $sanitizedExistingUri")
             pantryDao.insertItem(remoteItem.copy(localImageUri = sanitizedExistingUri))
         } else {
-            android.util.Log.d("PantryRepository", "Merging remote item ${remoteItem.id}, using remote values (Local URI was: ${existing?.localImageUri})")
+            android.util.Log.d("PantryRepository", "Merging remote item ${remoteItem.id}, using remote values (Tracking: ${remoteItem.trackingType})")
             pantryDao.insertItem(remoteItem)
         }
     }

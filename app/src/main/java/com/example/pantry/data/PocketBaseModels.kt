@@ -103,7 +103,15 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val mappedShelf = shelfNumber.coerceIn(1, 4)
     val mappedZone = zoneIndex.coerceIn(1, 3)
     
-    android.util.Log.d("PocketBaseModels", "Mapping $id: remoteUrl=$remoteImageUrl, shelf=$mappedShelf (raw=$shelfNumber)")
+    // Explicitly parse tracking type to see what's coming from server
+    val mappedTrackingType = try { 
+        TrackingType.valueOf(trackingType) 
+    } catch (e: Exception) { 
+        android.util.Log.e("PocketBaseModels", "Failed to parse trackingType: '$trackingType' for item $id, defaulting to DISCRETE_COUNT")
+        TrackingType.DISCRETE_COUNT 
+    }
+    
+    android.util.Log.d("PocketBaseModels", "Mapping $id: shelf=$mappedShelf, zone=$mappedZone, trackingType=$mappedTrackingType (raw='$trackingType')")
 
     return PantryItem(
         id = id ?: "",
@@ -115,7 +123,7 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         localImageUri = null, // Local URI is managed strictly by repository merge logic
         shelfNumber = mappedShelf,
         zoneIndex = mappedZone,
-        trackingType = try { TrackingType.valueOf(trackingType) } catch (e: Exception) { TrackingType.DISCRETE_COUNT },
+        trackingType = mappedTrackingType,
         sealedCount = sealedCount,
         activeFill = try { FillLevel.valueOf(activeFill) } catch (e: Exception) { FillLevel.FULL },
         createdAt = parsePocketBaseDate(created),

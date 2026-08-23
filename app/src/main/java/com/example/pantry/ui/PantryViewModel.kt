@@ -393,6 +393,11 @@ class PantryViewModel(
                 if (existingItem.barcode == null && trimmedBarcode != null) {
                     updatedItem = updatedItem.copy(barcode = trimmedBarcode)
                 }
+                // Also update tracking type if the heuristic now says it's a staple
+                if (existingItem.trackingType == TrackingType.DISCRETE_COUNT && trackingType == TrackingType.BULK_LEVEL) {
+                    updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
+                }
+                
                 addSealedUnit(updatedItem)
                 selectItem(updatedItem)
             } else {
@@ -439,27 +444,28 @@ class PantryViewModel(
             "baking powder", "salt"
         )
         
+        // Removed "pack" as it's too aggressive for items like "Flour Pack"
         val forceDiscreteKeywords = listOf(
             "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
-            "vinegar", "dressing", "can", "tin", "jar", "bottle", "pack"
+            "vinegar", "dressing", "can", "tin", "jar", "bottle"
         )
 
         val categoriesCombined = categories?.joinToString(" ")?.lowercase() ?: ""
         val quantityLower = quantity?.lowercase() ?: ""
         val nameLower = name.lowercase()
 
-        // 1. Force Discrete check (Highest priority)
+        // 1. Strict Bulk Keywords check (Highest Priority)
+        // These are staples typically managed by fill level (dry goods and oils).
+        if (strictBulkKeywords.any { categoriesCombined.contains(it) || nameLower.contains(it) }) {
+            return TrackingType.BULK_LEVEL
+        }
+
+        // 2. Force Discrete check
         // If it's explicitly a sauce, condiment, or mentions a container (bottle/jar), it's discrete.
         if (forceDiscreteKeywords.any { 
             categoriesCombined.contains(it) || quantityLower.contains(it) || nameLower.contains(it) 
         }) {
             return TrackingType.DISCRETE_COUNT
-        }
-
-        // 2. Strict Bulk Keywords check
-        // These are staples typically managed by fill level (dry goods and oils).
-        if (strictBulkKeywords.any { categoriesCombined.contains(it) || nameLower.contains(it) }) {
-            return TrackingType.BULK_LEVEL
         }
 
         // 3. Size/Unit Heuristics Fallback
