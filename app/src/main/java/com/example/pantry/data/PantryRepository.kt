@@ -202,7 +202,12 @@ class PantryRepository(
         var finalItem = remoteItem
         val nameLower = finalItem.name.lowercase()
         val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-        if (finalItem.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+        val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
+        
+        if (finalItem.trackingType == TrackingType.DISCRETE_COUNT && 
+            stapleKeywords.any { nameLower.contains(it) } &&
+            discreteKeywords.none { nameLower.contains(it) }
+        ) {
             finalItem = finalItem.copy(trackingType = TrackingType.BULK_LEVEL)
             android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} corrected to Staple mode.")
         }
