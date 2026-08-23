@@ -322,9 +322,20 @@ class PantryViewModel(
                 _uiState.update { it.copy(recognizedItem = null) }
             }
         } else {
-            addSealedUnit(item)
-            val label = getCellLabel((4 - item.shelfNumber).coerceIn(0, 3), (item.zoneIndex - 1).coerceIn(0, 2))
-            _uiState.update { it.copy(userNotification = "Added 1 to $label", recognizedItem = item) }
+            // Re-evaluate tracking type on scan in case heuristic improved
+            var updatedItem = item
+            val nameLower = item.name.lowercase()
+            val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil")
+            
+            if (item.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+                updatedItem = item.copy(trackingType = TrackingType.BULK_LEVEL)
+                repository.updateItem(updatedItem)
+                android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to Staple mode")
+            }
+
+            addSealedUnit(updatedItem)
+            val label = getCellLabel((4 - updatedItem.shelfNumber).coerceIn(0, 3), (updatedItem.zoneIndex - 1).coerceIn(0, 2))
+            _uiState.update { it.copy(userNotification = "Added 1 to $label", recognizedItem = updatedItem) }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
         }
