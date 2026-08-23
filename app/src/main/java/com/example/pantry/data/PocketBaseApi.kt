@@ -27,7 +27,8 @@ class PocketBaseApi {
         ignoreUnknownKeys = true 
         coerceInputValues = true
         isLenient = true
-        encodeDefaults = true // Force explicit values (e.g. shelf_number: 1) to be sent
+        encodeDefaults = true
+        explicitNulls = false // Crucial: prevents sending "id": null which PocketBase rejects
     }
     private val client = HttpClient(OkHttp) {
         expectSuccess = true

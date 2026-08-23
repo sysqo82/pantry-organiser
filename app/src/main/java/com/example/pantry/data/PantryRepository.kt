@@ -51,6 +51,15 @@ class PantryRepository(
                     needsUpdate = true
                 }
 
+                // 4. Retroactive Staple Fix: Force items like "Sugar" or "Flour" to BULK_LEVEL
+                val nameLower = item.name.lowercase()
+                val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil")
+                if (item.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+                    android.util.Log.i("PantryRepository", "Retroactively fixing tracking type for staple: ${item.name}")
+                    updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
+                    needsUpdate = true
+                }
+
                 if (needsUpdate) {
                     // Update local and trigger remote sync to fix server
                     updateItem(updatedItem)
@@ -189,23 +198,34 @@ class PantryRepository(
     private suspend fun mergeAndInsert(remoteItem: PantryItem) {
         val existing = pantryDao.getItemById(remoteItem.id)
         
-        // Prevent overwriting if local item was just updated (within 2 seconds) and server is older
-        if (existing != null && existing.updatedAt > remoteItem.updatedAt && (System.currentTimeMillis() - existing.updatedAt < 2000)) {
-            android.util.Log.d("PantryRepository", "Ignoring remote update for ${remoteItem.id} (Local is fresher)")
+        // Hard-enforce staple tracking type on inbound data
+        var finalItem = remoteItem
+        val nameLower = finalItem.name.lowercase()
+        val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
+        if (finalItem.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+            finalItem = finalItem.copy(trackingType = TrackingType.BULK_LEVEL)
+            android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} corrected to Staple mode.")
+        }
+        
+        // CONTENT-BASED COMPARISON: Only skip if core fields are identical.
+        if (existing != null && 
+            existing.name == finalItem.name &&
+            existing.brand == finalItem.brand &&
+            existing.barcode == finalItem.barcode &&
+            existing.sealedCount == finalItem.sealedCount &&
+            existing.activeFill == finalItem.activeFill &&
+            existing.shelfNumber == finalItem.shelfNumber &&
+            existing.zoneIndex == finalItem.zoneIndex &&
+            existing.trackingType == finalItem.trackingType &&
+            existing.imageUrl == finalItem.imageUrl
+        ) {
             return
         }
 
-        // Sanitize existing local URI to prevent preserving stale /cache/ paths
-        val sanitizedExistingUri = existing?.localImageUri?.takeIf {
-            it.isNotBlank() && !it.contains("/cache/") && File(it).exists()
-        }
+        // Sanitize local path logic
+        val sanitizedUri = existing?.localImageUri?.takeIf { it.isNotBlank() && !it.contains("/cache/") && File(it).exists() }
 
-        if (existing != null && sanitizedExistingUri != null) {
-            android.util.Log.d("PantryRepository", "Merging remote item ${remoteItem.id}, PRESERVING local image: $sanitizedExistingUri")
-            pantryDao.insertItem(remoteItem.copy(localImageUri = sanitizedExistingUri))
-        } else {
-            android.util.Log.d("PantryRepository", "Merging remote item ${remoteItem.id}, using remote values (Tracking: ${remoteItem.trackingType})")
-            pantryDao.insertItem(remoteItem)
-        }
+        android.util.Log.d("PantryRepository", "Syncing remote update for ${finalItem.id}. Mode: ${finalItem.trackingType}, Shelf: ${finalItem.shelfNumber}")
+        pantryDao.insertItem(finalItem.copy(localImageUri = sanitizedUri))
     }
 }
