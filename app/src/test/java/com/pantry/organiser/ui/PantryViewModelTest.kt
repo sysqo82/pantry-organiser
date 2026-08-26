@@ -181,6 +181,13 @@ class PantryViewModelTest {
     }
 
     @Test
+    fun `determineTrackingType categorizes Flour Pack as Bulk`() {
+        // "pack" used to force discrete, but now "flour" should take precedence
+        val product = OffProduct(productName = "Strong White Flour Pack", weight = "1.5kg")
+        assertEquals(TrackingType.BULK_LEVEL, viewModel.determineTrackingType(product))
+    }
+
+    @Test
     fun `determineTrackingType categorizes large 5L oil as Bulk`() {
         val product = OffProduct(productName = "Cooking Oil", weight = "5 l")
         assertEquals(TrackingType.BULK_LEVEL, viewModel.determineTrackingType(product))
