@@ -52,7 +52,7 @@ class PocketBaseApi {
     private val _realtimeEvents = MutableSharedFlow<RealtimeEvent>()
     val realtimeEvents: Flow<RealtimeEvent> = _realtimeEvents
 
-    suspend fun getItems(): List<PocketBasePantryItem> {
+    suspend fun getItems(): List<PocketBasePantryItem>? {
         return try {
             val response: PocketBaseListResponse<PocketBasePantryItem> = 
                 client.get("$baseUrl/api/collections/pantry_items/records") {
@@ -61,7 +61,7 @@ class PocketBaseApi {
             response.items
         } catch (e: Exception) {
             android.util.Log.e("PocketBase", "Failed to fetch items", e)
-            emptyList()
+            null
         }
     }
 

@@ -80,11 +80,28 @@ class PantryRepository(
             }
         }
 
-        // Initial Fetch & Sync
+        // Initial Fetch & Reconciliation Sync
         scope.launch {
-            val remoteItems = pocketBaseApi.getItems()
-            if (remoteItems.isNotEmpty()) {
-                remoteItems.forEach { mergeAndInsert(it.toLocal()) }
+            val remotePocketItems = pocketBaseApi.getItems()
+            if (remotePocketItems != null) {
+                val remoteItems = remotePocketItems.map { it.toLocal() }
+                val remoteIds = remoteItems.map { it.id }.toSet()
+                
+                // Get all local items to identify and remove "ghost" items
+                val localItems = pantryDao.getAllItemsOnce()
+                localItems.forEach { local ->
+                    // A "ghost" is a server-indexed item that no longer exists on the server.
+                    // We preserve items starting with "local_" as they are pending upload.
+                    if (!local.id.startsWith("local_") && !remoteIds.contains(local.id)) {
+                        android.util.Log.i("PantryRepository", "Pruning ghost item: ${local.name} (${local.id})")
+                        pantryDao.deleteItem(local)
+                    }
+                }
+                
+                // Merge/Update with current server state
+                remoteItems.forEach { mergeAndInsert(it) }
+            } else {
+                android.util.Log.w("PantryRepository", "Reconciliation skipped: Server unreachable.")
             }
         }
     }
