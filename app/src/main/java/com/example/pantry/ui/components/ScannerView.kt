@@ -48,6 +48,18 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
 import android.util.Log
 
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.drawWithCache
+import android.app.Activity
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+
 @Composable
 fun ScannerView(
     scannedProduct: OffProduct?,
@@ -69,6 +81,30 @@ fun ScannerView(
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
     val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    var isScreenLightEnabled by remember { mutableStateOf(false) }
+
+    // Screen Light Brightness Logic
+    DisposableEffect(isScreenLightEnabled) {
+        if (isScreenLightEnabled) {
+            val activity = context as? Activity
+            val window = activity?.window
+            val params = window?.attributes
+            val originalBrightness = params?.screenBrightness ?: -1f
+            
+            params?.screenBrightness = 1.0f // Force Max Brightness
+            window?.attributes = params
+            
+            onDispose {
+                val resetParams = window?.attributes
+                resetParams?.screenBrightness = originalBrightness
+                window?.attributes = resetParams
+            }
+        } else {
+            onDispose {}
+        }
+    }
 
     // Handle system back button to close scanner
     BackHandler(onBack = onDismiss)
@@ -105,6 +141,48 @@ fun ScannerView(
                 }
             }
         )
+
+        // LAYER 0.5: SCREEN LIGHT OVERLAY
+        AnimatedVisibility(
+            visible = isScreenLightEnabled,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(300))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer(alpha = 0.99f) // Required for BlendMode.Clear to work
+                    .drawWithCache {
+                        onDrawWithContent {
+                            // Stark white background to reflect light
+                            drawRect(Color.White)
+                            
+                            // Cut out a viewfinder hole so we can still see the camera
+                            val holeWidth = size.width * 0.85f
+                            val holeHeight = size.height * 0.35f
+                            val topOffset = (size.height - holeHeight) / 2f
+                            val leftOffset = (size.width - holeWidth) / 2f
+                            
+                            drawRoundRect(
+                                color = Color.Transparent,
+                                topLeft = Offset(leftOffset, topOffset),
+                                size = androidx.compose.ui.geometry.Size(holeWidth, holeHeight),
+                                cornerRadius = CornerRadius(24.dp.toPx()),
+                                blendMode = androidx.compose.ui.graphics.BlendMode.Clear
+                            )
+                            
+                            // Visual guide for the "Sweet Spot"
+                            drawRoundRect(
+                                color = Color.Yellow.copy(alpha = 0.5f),
+                                topLeft = Offset(leftOffset, topOffset),
+                                size = androidx.compose.ui.geometry.Size(holeWidth, holeHeight),
+                                cornerRadius = CornerRadius(24.dp.toPx()),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                            )
+                        }
+                    }
+            )
+        }
 
         // LAYER 1: UI OVERLAYS & CONTROLS
         // We coordinate guidance and bottom bar to avoid overlap
@@ -430,6 +508,25 @@ fun ScannerView(
         ) {
             Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
+
+        // Screen Light Toggle (Top Left)
+        IconButton(
+            onClick = { isScreenLightEnabled = !isScreenLightEnabled },
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(16.dp)
+                .background(
+                    if (isScreenLightEnabled) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.3f), 
+                    CircleShape
+                )
+        ) {
+            Icon(
+                imageVector = if (isScreenLightEnabled) Icons.Filled.Lightbulb else Icons.Outlined.Lightbulb,
+                contentDescription = "Screen Light",
+                tint = if (isScreenLightEnabled) Color.White else Color.White
+            )
+        }
     }
 }
 
@@ -445,13 +542,23 @@ fun CameraPreview(
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val barcodeScanner = remember { 
         val options = BarcodeScannerOptions.Builder()
-            .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_ALL_FORMATS)
+            .setBarcodeFormats(
+                com.google.mlkit.vision.barcode.common.Barcode.FORMAT_EAN_13,
+                com.google.mlkit.vision.barcode.common.Barcode.FORMAT_EAN_8,
+                com.google.mlkit.vision.barcode.common.Barcode.FORMAT_UPC_A,
+                com.google.mlkit.vision.barcode.common.Barcode.FORMAT_UPC_E
+            )
             .build()
         BarcodeScanning.getClient(options)
     }
 
     var lastScannedBarcode by remember { mutableStateOf<String?>(null) }
     var lastScanTime by remember { mutableLongStateOf(0L) }
+    
+    // STAGE 4: Stability Filter State
+    // We keep track of the barcode seen in the *previous* frame.
+    // We only confirm the scan if we see the same valid barcode twice in a row.
+    var unconfirmedBarcode by remember { mutableStateOf<String?>(null) }
     
     val cameraProviderRef = remember { mutableStateOf<ProcessCameraProvider?>(null) }
     val cameraControlRef = remember { mutableStateOf<CameraControl?>(null) }
@@ -516,9 +623,20 @@ fun CameraPreview(
                                     imageProxy, 
                                     onBarcodeScanned = { barcode ->
                                         val currentTime = System.currentTimeMillis()
+                                        
+                                        // STAGE 4: Stability Check (Double-Pass)
+                                        // 1. If it's a "fresh" scan, hold it for confirmation
+                                        if (barcode != unconfirmedBarcode) {
+                                            unconfirmedBarcode = barcode
+                                            return@processImageProxy
+                                        }
+                                        
+                                        // 2. If it's the SAME barcode as the previous frame, we trust it.
+                                        // We still apply the 3-second debounce to prevent multiple triggers.
                                         if (barcode != lastScannedBarcode || currentTime - lastScanTime > 3000) {
                                             lastScannedBarcode = barcode
                                             lastScanTime = currentTime
+                                            unconfirmedBarcode = null // Reset for next item
                                             currentOnBarcodeScanned(barcode)
                                         }
                                     }
@@ -541,6 +659,18 @@ fun CameraPreview(
                         imageAnalysis
                     )
                     cameraControlRef.value = camera.cameraControl
+                    
+                    // STAGE 1: Exposure Compensation for difficult labels
+                    // We bump exposure by +1 index to brighten up dark labels (like soy sauce)
+                    // provided the hardware supports it.
+                    val exposureState = camera.cameraInfo.exposureState
+                    if (exposureState.isExposureCompensationSupported) {
+                        val range = exposureState.exposureCompensationRange
+                        val targetIndex = (exposureState.exposureCompensationIndex + 3).coerceIn(range.lower, range.upper)
+                        camera.cameraControl.setExposureCompensationIndex(targetIndex)
+                        Log.d("ScannerView", "Exposure compensated: $targetIndex (Range: $range)")
+                    }
+
                     camera.cameraControl.setLinearZoom(0.2f)
                 } catch (e: Exception) {
                     Log.e("CameraPreview", "Use case binding failed", e)
@@ -591,11 +721,17 @@ private fun processImageProxy(
     val mediaImage = imageProxy.image
     if (mediaImage != null) {
         val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+        
         barcodeScanner.process(image)
             .addOnSuccessListener { barcodes ->
                 for (barcode in barcodes) {
-                    barcode.rawValue?.let { 
-                        onBarcodeScanned(it) 
+                    val rawValue = barcode.rawValue ?: continue
+                    
+                    // STAGE 4: Mathematical Checksum + Stability Filter
+                    if (isValidBarcodeChecksum(rawValue)) {
+                        onBarcodeScanned(rawValue)
+                    } else {
+                        Log.d("Scanner", "Ignoring corrupted barcode (failed checksum): $rawValue")
                     }
                 }
             }
@@ -607,5 +743,30 @@ private fun processImageProxy(
             }
     } else {
         imageProxy.close()
+    }
+}
+
+/**
+ * Validates EAN-13 and UPC checksums to prevent misreads from low-quality front cameras.
+ */
+private fun isValidBarcodeChecksum(barcode: String): Boolean {
+    val digits = barcode.filter { it.isDigit() }
+    if (digits.length !in listOf(8, 12, 13)) return false
+    
+    return try {
+        val checkDigit = digits.last().digitToInt()
+        val payload = digits.dropLast(1).reversed()
+        
+        var sum = 0
+        for ((index, char) in payload.withIndex()) {
+            val digit = char.digitToInt()
+            // Weighted sum: odd positions (from right) multiplied by 3, even by 1
+            sum += if (index % 2 == 0) digit * 3 else digit
+        }
+        
+        val calculatedCheck = (10 - (sum % 10)) % 10
+        checkDigit == calculatedCheck
+    } catch (_: Exception) {
+        false
     }
 }

@@ -48,7 +48,7 @@ class PantryRepositoryTest {
         
         coEvery { pocketBaseApi.createItem(any()) } returns remoteItem
         // Mock getItemById to return the item (it exists)
-        coEvery { pantryDao.getItemById(any()) } returns mockk()
+        coEvery { pantryDao.getItemById(any()) } returns item
 
         repository.addItem(item)
         

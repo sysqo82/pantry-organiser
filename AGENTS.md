@@ -1,4 +1,5 @@
 Always run the entire suite of tests after every code change
+Never EVER touch anything out of the scope of fix, feature or refactor code
 \# UI \& Android Development Terminology Glossary
 
 
