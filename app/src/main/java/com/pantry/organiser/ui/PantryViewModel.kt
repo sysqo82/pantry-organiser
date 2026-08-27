@@ -45,7 +45,10 @@ class PantryViewModel(
                 _uiState.update { 
                     it.copy(
                         items = items,
-                        filteredItems = filterItems(items, it.selectedShelf)
+                        filteredItems = filterItems(items, it.selectedShelf),
+                        editingItem = it.editingItem?.let { current -> 
+                            items.find { item -> item.id == current.id } ?: current 
+                        }
                     ) 
                 }
             }
@@ -283,6 +286,18 @@ class PantryViewModel(
 
                 if (existingItem != null) {
                     android.util.Log.d("PantryVM", "Local match found for: ${existingItem.name}")
+                    
+                    // NEW: If item is missing its API image but we have a barcode, try to "discover" it
+                    if (existingItem.apiImageUrl == null) {
+                        viewModelScope.launch {
+                            val product = offRepository.getProduct(trimmedBarcode)
+                            if (product?.imageUrl != null) {
+                                repository.updateItem(existingItem.copy(apiImageUrl = product.imageUrl))
+                                android.util.Log.d("PantryVM", "Discovered API image for existing item: ${existingItem.name}")
+                            }
+                        }
+                    }
+                    
                     handleExistingItemScan(existingItem)
                     isProcessingScan = false
                     return@launch
@@ -451,6 +466,7 @@ class PantryViewModel(
                 addSealedUnit(updatedItem)
                 selectItem(updatedItem)
             } else {
+                val isOffUrl = imageUrl?.contains("openfoodfacts.org") == true
                 val newItem = PantryItem(
                     id = "", // Will be assigned a temp ID in repository
                     name = name,
@@ -458,8 +474,8 @@ class PantryViewModel(
                     packageQuantity = packageQuantity,
                     shelfNumber = shelfNumber.coerceIn(1, 4),
                     zoneIndex = zoneIndex.coerceIn(1, 3),
-                    imageUrl = imageUrl,
-                    apiImageUrl = null, // Manual items have no API image
+                    imageUrl = if (isOffUrl) null else imageUrl,
+                    apiImageUrl = if (isOffUrl) imageUrl else null,
                     barcode = trimmedBarcode,
                     trackingType = trackingType,
                     activeFill = FillLevel.FULL,

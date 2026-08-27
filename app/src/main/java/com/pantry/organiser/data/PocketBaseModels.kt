@@ -94,7 +94,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         barcode = barcode,
         brand = brand,
         packageQuantity = packageQuantity,
-        imageUrl = apiImageUrl ?: imageUrl?.takeIf { it.isNotBlank() && it != "N/A" },
+        imageUrl = apiImageUrl, // ONLY use apiImageUrl for the remote image_url field
         image = if (imageUrl == null) "" else null, // Explicitly clear PB file field if imageUrl is null (Restore case)
         shelfNumber = pbShelf,
         zoneIndex = pbZone,

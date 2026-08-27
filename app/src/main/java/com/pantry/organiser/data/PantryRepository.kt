@@ -267,11 +267,14 @@ class PantryRepository @JvmOverloads constructor(
         }
 
         // PHOTO SYNC LOGIC: If the remote URL has changed, it means a new photo was uploaded.
-        // In this case, we MUST discard the local image URI to force the UI to show the new remote photo.
+        // We compare the full URL which includes the 'v' (version) timestamp from PocketBase.
         val hasPhotoChanged = existing != null && existing.imageUrl != finalItem.imageUrl
         
+        if (hasPhotoChanged) {
+            android.util.Log.i("PantryRepository", "Photo update detected for ${finalItem.name}. Remote: ${finalItem.imageUrl}, Local: ${existing?.imageUrl}. Discarding local cache.")
+        }
+
         val sanitizedUri = if (hasPhotoChanged) {
-            android.util.Log.i("PantryRepository", "Photo update detected for ${finalItem.name}. Discarding local cache.")
             null
         } else {
             existing?.localImageUri?.takeIf { it.isNotBlank() && !it.contains("/cache/") && File(it).exists() }
