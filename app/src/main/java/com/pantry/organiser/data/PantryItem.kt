@@ -58,6 +58,8 @@ data class PantryItem(
     @ColumnInfo(name = "zone_index") val zoneIndex: Int,     // 1: Left, 2: Mid, 3: Right
     @ColumnInfo(name = "tracking_type") val trackingType: TrackingType = TrackingType.BULK_LEVEL,
     @ColumnInfo(name = "sealed_count") val sealedCount: Int = 0,
+    @ColumnInfo(name = "units_per_pack") val unitsPerPack: Int = 1,
+    @ColumnInfo(name = "active_count") val activeCount: Int = 1,
     @ColumnInfo(name = "active_fill") val activeFill: FillLevel = FillLevel.FULL,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
@@ -65,7 +67,60 @@ data class PantryItem(
     // Derived properties for UI consistency - strictly enforcing 1-based indexing
     val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 4)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
+
+    companion object {
+        /**
+         * Heuristic to extract bundle size (e.g. "4 x 100g", "3x80g", "4x 200ml", "4 Pack", "Pack of 6")
+         */
+        fun inferUnitsPerPack(name: String?, quantity: String?): Int {
+            val searchString = "${name ?: ""} ${quantity ?: ""}".lowercase()
+            
+            // 1. Multiplier patterns: "4 x 100g", "3x80g", "4x 200ml", "3 * 100g"
+            val multiplierRegex = """(\d+)\s*[x×*]\s*\d+""".toRegex()
+            multiplierRegex.find(searchString)?.let {
+                val val1 = it.groupValues[1].toIntOrNull() ?: 1
+                if (val1 in 2..48) return val1
+            }
+            
+            // 2. "Pack of" patterns: "Pack of 4", "Pack of 6"
+            val packOfRegex = """pack of (\d+)""".toRegex()
+            packOfRegex.find(searchString)?.let {
+                return it.groupValues[1].toIntOrNull() ?: 1
+            }
+
+            // 3. Number before "Pack" patterns: "4 pack", "6 pack", "4-pack"
+            val numberPackRegex = """(\d+)\s*-?pack\b""".toRegex()
+            numberPackRegex.find(searchString)?.let {
+                return it.groupValues[1].toIntOrNull() ?: 1
+            }
+
+            // 4. Compact "pk" patterns: "4pk", "6pk"
+            val pkRegex = """(\d+)\s*pk\b""".toRegex()
+            pkRegex.find(searchString)?.let {
+                return it.groupValues[1].toIntOrNull() ?: 1
+            }
+
+            // 5. Tins/Cans patterns: "3 tins", "4 cans"
+            val containersRegex = """(\d+)\s*(tins|cans|jars|bottles|pots)\b""".toRegex()
+            containersRegex.find(searchString)?.let {
+                return it.groupValues[1].toIntOrNull() ?: 1
+            }
+            
+            // 6. Loose multiplier at end: "Sweetcorn 3" or "Yogurt 4" (dangerous but user requested robustness)
+            // Only if it's a small number at the end of a string
+            val endNumberRegex = """\b(\d{1,2})$""".toRegex()
+            endNumberRegex.find(searchString.trim())?.let {
+                val val1 = it.groupValues[1].toIntOrNull() ?: 1
+                if (val1 in 2..12) return val1
+            }
+            
+            return 1
+        }
+
+
+    }
 }
+
 
 class PantryTypeConverters {
     @TypeConverter fun fromTrackingType(type: TrackingType): String = type.name

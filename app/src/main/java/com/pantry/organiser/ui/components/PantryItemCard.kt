@@ -108,6 +108,21 @@ fun PantryItemCard(
                             style = MaterialTheme.typography.labelSmall
                         )
                     }
+                    
+                    if (item.unitsPerPack > 1) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Text(
+                                text = "${item.unitsPerPack}-pack",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
 
@@ -118,11 +133,18 @@ fun PantryItemCard(
                 ) {
                     // Sealed Pill
                     SealedStockPill(
-                        count = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.sealedCount + 1 else item.sealedCount,
-                        label = if (item.trackingType == TrackingType.DISCRETE_COUNT) "Count" else "Sealed",
+                        count = if (item.trackingType == TrackingType.BULK_LEVEL) {
+                            item.sealedCount + (if (item.activeFill != FillLevel.EMPTY) 1 else 0)
+                        } else {
+                            item.sealedCount
+                        },
+                        unitsPerPack = item.unitsPerPack,
                         onAdd = onAddSealed,
                         onRemove = onRemoveSealed
                     )
+
+
+
 
                     // Active Fill Control (Only for Staples)
                     if (item.trackingType == TrackingType.BULK_LEVEL) {
@@ -132,7 +154,7 @@ fun PantryItemCard(
                             onRefill = onIncrementFill
                         )
                     } else {
-                        // For discrete items, a simple Consume button
+                    // For discrete items, a simple Consume button
                         Button(
                             onClick = onConsume,
                             modifier = Modifier.height(32.dp),
@@ -145,9 +167,11 @@ fun PantryItemCard(
                         ) {
                             Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text("Consume", style = MaterialTheme.typography.labelSmall)
+                            Text(if (item.unitsPerPack > 1) "${item.sealedCount} left" else "Consume", style = MaterialTheme.typography.labelSmall)
                         }
+
                     }
+
                 }
             } else {
                 // Read-Only Summary View
@@ -155,15 +179,21 @@ fun PantryItemCard(
                     horizontalAlignment = Alignment.End,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    val count = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.sealedCount + 1 else item.sealedCount
-                    val label = if (item.trackingType == TrackingType.DISCRETE_COUNT) "Count" else "Sealed"
-                    
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         shape = CircleShape
                     ) {
+                        val displayCount = if (item.unitsPerPack > 1) {
+                            (item.sealedCount + item.unitsPerPack - 1) / item.unitsPerPack
+                        } else {
+                            item.sealedCount
+                        }
+                        
+                        val label = if (item.unitsPerPack > 1) "Packs" else "Items"
+                        val countText = displayCount.toString()
+                        
                         Text(
-                            text = "$count $label",
+                            text = "$countText $label",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -177,6 +207,10 @@ fun PantryItemCard(
                 }
             }
 
+
+
+
+
             IconButton(onClick = onEditClick) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Edit Item")
             }
@@ -187,10 +221,11 @@ fun PantryItemCard(
 @Composable
 fun SealedStockPill(
     count: Int,
-    label: String = "Sealed",
+    unitsPerPack: Int,
     onAdd: () -> Unit,
     onRemove: () -> Unit
 ) {
+
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         shape = CircleShape,
@@ -207,11 +242,24 @@ fun SealedStockPill(
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "$count $label",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
+            
+            Column(horizontalAlignment = Alignment.Start) {
+                val displayCount = if (unitsPerPack > 1) {
+                    (count + unitsPerPack - 1) / unitsPerPack
+                } else {
+                    count
+                }
+                
+                Text(
+                    text = "$displayCount Items",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+
+
+
             
             Spacer(modifier = Modifier.width(4.dp))
             

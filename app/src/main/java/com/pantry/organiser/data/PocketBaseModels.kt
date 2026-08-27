@@ -17,7 +17,10 @@ data class PocketBasePantryItem(
     @SerialName("zone_index") val zoneIndex: Int = 1,
     @SerialName("tracking_type") val trackingType: String = "DISCRETE_COUNT", // "DISCRETE_COUNT" | "BULK_LEVEL"
     @SerialName("sealed_count") val sealedCount: Int = 0,
+    @SerialName("units_per_pack") val unitsPerPack: Int? = null,
+    @SerialName("active_count") val activeCount: Int? = null,
     @SerialName("active_fill") val activeFill: String = "FULL", // enum names
+
     @SerialName("created") val created: String? = null,
     @SerialName("updated") val updated: String? = null
 )
@@ -78,6 +81,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
     
     val enforcedTrackingType = if (trackingType == TrackingType.DISCRETE_COUNT && 
+        unitsPerPack <= 1 && // Never force bulk for multipacks
         stapleKeywords.any { nameLower.contains(it) } && 
         discreteKeywords.none { nameLower.contains(it) }
     ) {
@@ -85,6 +89,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     } else {
         trackingType
     }
+
     
     android.util.Log.d("PocketBaseModels", "Syncing $id to PB: shelf=$pbShelf, zone=$pbZone, trackingType=$enforcedTrackingType")
     
@@ -100,6 +105,8 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         zoneIndex = pbZone,
         trackingType = enforcedTrackingType.name,
         sealedCount = sealedCount,
+        unitsPerPack = unitsPerPack,
+        activeCount = activeCount,
         activeFill = activeFill.name
     )
 }
@@ -125,6 +132,14 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     } catch (e: Exception) { 
         TrackingType.DISCRETE_COUNT 
     }
+
+    // Heuristic Fallback: If server field is missing, infer from name/quantity.
+    // This handles cases where the server schema hasn't been updated.
+    val inferredUnits = PantryItem.inferUnitsPerPack(name, packageQuantity)
+    val finalUnitsPerPack = unitsPerPack ?: inferredUnits
+    
+    // If active_count is missing from server, assume a full pack based on units_per_pack
+    val finalActiveCount = activeCount ?: finalUnitsPerPack
     
     return PantryItem(
         id = id ?: "",
@@ -139,8 +154,13 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         zoneIndex = mappedZone,
         trackingType = mappedTrackingType,
         sealedCount = sealedCount,
+        unitsPerPack = finalUnitsPerPack,
+        activeCount = finalActiveCount,
         activeFill = try { FillLevel.valueOf(activeFill) } catch (e: Exception) { FillLevel.FULL },
         createdAt = createdAtTime,
         updatedAt = updatedAtTime
     )
 }
+
+
+

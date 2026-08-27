@@ -200,6 +200,7 @@ fun PantryScreen(viewModel: PantryViewModel) {
                 onAssignShelf = { r, c -> viewModel.assignPendingItemShelf(r, c) },
                 onCancelPending = { viewModel.cancelPendingItem() },
                 onUpdateConsumeLevel = { viewModel.updatePendingConsumeLevel(it) },
+                onUpdateConsumeUnits = { viewModel.updatePendingConsumeUnits(it) },
                 onCancelConsume = { viewModel.cancelPendingConsume() },
                 onSave = { name, brand, qty, r, c, img, bc, type ->
                     viewModel.saveScannedItem(name, brand, qty, r, c, img, bc, type)
@@ -211,6 +212,8 @@ fun PantryScreen(viewModel: PantryViewModel) {
         }
     }
 }
+
+
 
 @Composable
 fun MobileLayout(

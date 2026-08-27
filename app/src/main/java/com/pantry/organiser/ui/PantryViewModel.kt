@@ -89,24 +89,29 @@ class PantryViewModel(
 
     fun consumePortion(item: PantryItem) {
         if (_uiState.value.isReadOnly) return
+        
+        // Multipack logic: Show selection overlay instead of immediate consumption
+        if (item.unitsPerPack > 1) {
+            _uiState.update { it.copy(pendingConsumeItem = item) }
+            return
+        }
+
         viewModelScope.launch {
             if (item.trackingType == TrackingType.DISCRETE_COUNT) {
-                // Discrete logic:
-                if (item.sealedCount > 0) {
-                    // Reduce reserve stock
+                // Discrete logic: Unify on sealedCount as total units
+                if (item.sealedCount > 1) {
                     val updatedItem = item.copy(
                         sealedCount = item.sealedCount - 1,
                         updatedAt = System.currentTimeMillis()
                     )
                     repository.updateItem(updatedItem)
-                    _uiState.update { it.copy(userNotification = "Consumed 1 unit of ${item.name}") }
+                    _uiState.update { it.copy(userNotification = "Consumed 1 unit of ${item.name} (${updatedItem.sealedCount} left)") }
                 } else {
-                    // No reserve left, consume the final active unit
                     repository.deleteItem(item)
                     _uiState.update { it.copy(userNotification = "Removed ${item.name} (Last unit consumed)") }
                 }
             } else {
-                // Staple/Bulk logic: Step down fill level or roll over to next sealed unit
+                // Staple/Bulk logic: remains same for now (fill levels)
                 var updatedItem = item.copy(updatedAt = System.currentTimeMillis())
                 
                 if (item.activeFill == FillLevel.EMPTY) {
@@ -116,41 +121,99 @@ class PantryViewModel(
                             activeFill = FillLevel.FULL
                         )
                         _uiState.update { it.copy(userNotification = "Opened a sealed pack of ${item.name}") }
+                        repository.updateItem(updatedItem)
+                    } else {
+                        repository.deleteItem(item)
+                        _uiState.update { it.copy(userNotification = "Removed ${item.name}") }
                     }
                 } else {
                     val nextFill = item.activeFill.prev()
-                    if (item.activeFill == FillLevel.LOW && nextFill == FillLevel.EMPTY) {
+                    if (nextFill == FillLevel.EMPTY) {
                         if (item.sealedCount > 0) {
                             updatedItem = updatedItem.copy(
                                 sealedCount = item.sealedCount - 1,
                                 activeFill = FillLevel.FULL
                             )
                             _uiState.update { it.copy(userNotification = "Opened a sealed pack of ${item.name}") }
+                            repository.updateItem(updatedItem)
                         } else {
-                            updatedItem = updatedItem.copy(activeFill = FillLevel.EMPTY)
+                            repository.deleteItem(item)
+                            _uiState.update { it.copy(userNotification = "Removed ${item.name}") }
                         }
                     } else {
                         updatedItem = updatedItem.copy(activeFill = nextFill)
+                        repository.updateItem(updatedItem)
                     }
                 }
-                repository.updateItem(updatedItem)
+
             }
         }
     }
 
+    fun consumeUnits(item: PantryItem, unitsToConsume: Int) {
+        if (_uiState.value.isReadOnly) return
+        viewModelScope.launch {
+            // Auto-expand legacy 1-count multipack to full pack size before deduction
+            val currentUnits = if (item.unitsPerPack > 1 && item.sealedCount == 1) {
+                item.unitsPerPack
+            } else {
+                item.sealedCount
+            }
+
+            val remainingUnits = currentUnits - unitsToConsume
+            
+            android.util.Log.d("PantryVM", "Consuming $unitsToConsume of ${item.name}. Total: $currentUnits, Remaining: $remainingUnits")
+
+            if (remainingUnits <= 0) {
+                android.util.Log.d("PantryVM", "Item finished, deleting: ${item.name}")
+                repository.deleteItem(item)
+                _uiState.update { it.copy(
+                    userNotification = "Consumed $unitsToConsume units of ${item.name}. All finished!",
+                    pendingConsumeItem = null,
+                    isScannerVisible = false
+                ) }
+
+            } else {
+                val updatedItem = item.copy(
+                    sealedCount = remainingUnits,
+                    updatedAt = System.currentTimeMillis()
+                )
+                repository.updateItem(updatedItem)
+                _uiState.update { it.copy(
+                    userNotification = "Consumed $unitsToConsume units of ${item.name}. $remainingUnits left.",
+                    pendingConsumeItem = null,
+                    isScannerVisible = false
+                ) }
+            }
+        }
+    }
+
+
+
+
+
     fun addSealedUnit(item: PantryItem) {
         if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
-            var updatedItem = item.copy(
-                sealedCount = item.sealedCount + 1,
-                updatedAt = System.currentTimeMillis()
-            )
-            if (item.activeFill == FillLevel.EMPTY) {
-                updatedItem = updatedItem.copy(activeFill = FillLevel.FULL)
+            if (item.trackingType == TrackingType.BULK_LEVEL && item.activeFill == FillLevel.EMPTY) {
+                // If it was empty, the "new" unit becomes the active one
+                repository.updateItem(item.copy(
+                    activeFill = FillLevel.FULL,
+                    updatedAt = System.currentTimeMillis()
+                ))
+            } else {
+                // Otherwise increment the reserve stock
+                val increment = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.unitsPerPack else 1
+                repository.updateItem(item.copy(
+                    sealedCount = item.sealedCount + increment,
+                    updatedAt = System.currentTimeMillis()
+                ))
             }
-            repository.updateItem(updatedItem)
         }
     }
+
+
+
 
     fun removeSealedUnit(item: PantryItem) {
         if (_uiState.value.isReadOnly) return
@@ -287,18 +350,34 @@ class PantryViewModel(
                 if (existingItem != null) {
                     android.util.Log.d("PantryVM", "Local match found for: ${existingItem.name}")
                     
-                    // NEW: If item is missing its API image but we have a barcode, try to "discover" it
-                    if (existingItem.apiImageUrl == null) {
+                    // Re-discover missing data or upgrade to multipack
+                    if (existingItem.apiImageUrl == null || existingItem.unitsPerPack <= 1) {
                         viewModelScope.launch {
                             val product = offRepository.getProduct(trimmedBarcode)
-                            if (product?.imageUrl != null) {
-                                repository.updateItem(existingItem.copy(apiImageUrl = product.imageUrl))
-                                android.util.Log.d("PantryVM", "Discovered API image for existing item: ${existingItem.name}")
+                            if (product != null) {
+                                var updated = existingItem
+                                if (existingItem.apiImageUrl == null && product.imageUrl != null) {
+                                    updated = updated.copy(apiImageUrl = product.imageUrl)
+                                }
+                                if (existingItem.unitsPerPack <= 1) {
+                                    val inferred = product.inferUnitsPerPack()
+                                    if (inferred > 1) {
+                                        updated = updated.copy(
+                                            unitsPerPack = inferred,
+                                            activeCount = if (updated.activeCount <= 1) inferred else updated.activeCount
+                                        )
+                                        android.util.Log.d("PantryVM", "Discovered multipack for existing item: ${existingItem.name} ($inferred-pack)")
+                                    }
+                                }
+                                if (updated != existingItem) {
+                                    repository.updateItem(updated)
+                                }
                             }
                         }
                     }
                     
                     handleExistingItemScan(existingItem)
+
                     isProcessingScan = false
                     return@launch
                 }
@@ -318,7 +397,14 @@ class PantryViewModel(
                 isProcessingScan = false // UNLOCK IMMEDIATELY AFTER API RESPONSE
                 
                 if (product != null) {
-                    val trackingType = determineTrackingType(product)
+                    var trackingType = determineTrackingType(product)
+                    val unitsPerPack = product.inferUnitsPerPack()
+                    
+                    // Force discrete for multipacks
+                    if (unitsPerPack > 1) {
+                        trackingType = TrackingType.DISCRETE_COUNT
+                    }
+
                     val tempItem = PantryItem(
                         id = "", // Empty ID for new local items
                         name = product.displayProductName ?: "Unknown Item",
@@ -330,11 +416,15 @@ class PantryViewModel(
                         apiImageUrl = product.imageUrl, // Capture official API image
                         barcode = trimmedBarcode,
                         trackingType = trackingType,
+                        unitsPerPack = unitsPerPack,
+                        activeCount = 1, // Not used for logic anymore
                         activeFill = FillLevel.FULL,
-                        sealedCount = 0
+                        sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 0
                     )
                     _uiState.update { it.copy(isLoading = false, pendingNewItem = tempItem) }
                 } else {
+
+
                     _uiState.update { it.copy(isLoading = false, error = "Product not found") }
                     kotlinx.coroutines.delay(2000)
                     _uiState.update { it.copy(error = null) }
@@ -361,36 +451,72 @@ class PantryViewModel(
         }
 
         if (_uiState.value.scannerMode == ScannerMode.CONSUME) {
-            if (item.trackingType == TrackingType.BULK_LEVEL) {
-                _uiState.update { it.copy(pendingConsumeItem = item) }
+            // Apply heuristic before setting pendingConsumeItem to ensure UI knows it's a multipack
+            var consumeItem = item
+            val inferred = PantryItem.inferUnitsPerPack(item.name, item.packageQuantity)
+            if (inferred > 1 && item.unitsPerPack <= 1) {
+                // If it was tracked as 1 item but is clearly a multipack, upgrade it
+                consumeItem = item.copy(
+                    unitsPerPack = inferred,
+                    sealedCount = if (item.sealedCount == 1) inferred else item.sealedCount
+                )
+                android.util.Log.d("PantryVM", "Consume-time upgrade for ${item.name}: $inferred-pack")
+            }
+
+            if (consumeItem.trackingType == TrackingType.BULK_LEVEL || consumeItem.unitsPerPack > 1) {
+                _uiState.update { it.copy(pendingConsumeItem = consumeItem) }
             } else {
-                consumePortion(item)
-                _uiState.update { it.copy(userNotification = "Consumed 1 unit of ${item.name}", recognizedItem = item) }
+                consumePortion(consumeItem)
+                _uiState.update { it.copy(userNotification = "Consumed 1 unit of ${consumeItem.name}", recognizedItem = consumeItem) }
                 kotlinx.coroutines.delay(800)
                 _uiState.update { it.copy(recognizedItem = null) }
             }
         } else {
-            // Re-evaluate tracking type on scan in case heuristic improved
+            // Re-evaluate tracking type and multipack status on scan
             var updatedItem = item
             val nameLower = item.name.lowercase()
             val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
             val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
             
+            var needsRepoUpdate = false
+
             if (item.trackingType == TrackingType.DISCRETE_COUNT && 
                 stapleKeywords.any { nameLower.contains(it) } &&
                 discreteKeywords.none { nameLower.contains(it) }
             ) {
-                updatedItem = item.copy(trackingType = TrackingType.BULK_LEVEL)
-                repository.updateItem(updatedItem)
+                updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
+                needsRepoUpdate = true
                 android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to Staple mode")
             }
 
+            // Re-evaluate multipack if current is 1
+            if (updatedItem.unitsPerPack <= 1) {
+                val inferredUnits = PantryItem.inferUnitsPerPack(updatedItem.name, updatedItem.packageQuantity)
+                if (inferredUnits > 1) {
+                    updatedItem = updatedItem.copy(
+                        unitsPerPack = inferredUnits,
+                        trackingType = TrackingType.DISCRETE_COUNT, // Force discrete for multipacks
+                        sealedCount = if (updatedItem.sealedCount <= 1) inferredUnits else updatedItem.sealedCount
+                    )
+                    needsRepoUpdate = true
+                    android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to ${inferredUnits}-pack Discrete")
+                }
+            }
+
+
+            if (needsRepoUpdate) {
+                repository.updateItem(updatedItem)
+            }
+
             addSealedUnit(updatedItem)
-            val label = getCellLabel((4 - updatedItem.shelfNumber).coerceIn(0, 3), (updatedItem.zoneIndex - 1).coerceIn(0, 2))
-            _uiState.update { it.copy(userNotification = "Added 1 to $label", recognizedItem = updatedItem) }
+            if (updatedItem.sealedCount >= 0) {
+                val label = getCellLabel((4 - updatedItem.shelfNumber).coerceIn(0, 3), (updatedItem.zoneIndex - 1).coerceIn(0, 2))
+                _uiState.update { it.copy(userNotification = "Added 1 pack to $label", recognizedItem = updatedItem) }
+            }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
         }
+
     }
 
     fun assignPendingItemShelf(row: Int, col: Int) {
@@ -414,10 +540,33 @@ class PantryViewModel(
     fun updatePendingConsumeLevel(level: FillLevel) {
         val item = _uiState.value.pendingConsumeItem ?: return
         viewModelScope.launch {
-            repository.updateItem(item.copy(activeFill = level, updatedAt = System.currentTimeMillis()))
-            _uiState.update { it.copy(pendingConsumeItem = null, userNotification = "Updated ${item.name} to $level") }
+            if (level == FillLevel.EMPTY) {
+                if (item.sealedCount > 0) {
+                    repository.updateItem(item.copy(
+                        sealedCount = item.sealedCount - 1,
+                        activeFill = FillLevel.FULL,
+                        updatedAt = System.currentTimeMillis()
+                    ))
+                    _uiState.update { it.copy(userNotification = "Opened a sealed pack of ${item.name}") }
+                } else {
+                    repository.deleteItem(item)
+                    _uiState.update { it.copy(userNotification = "Removed ${item.name}") }
+                }
+            } else {
+                repository.updateItem(item.copy(activeFill = level, updatedAt = System.currentTimeMillis()))
+                _uiState.update { it.copy(userNotification = "Updated ${item.name} to $level") }
+            }
+            _uiState.update { it.copy(pendingConsumeItem = null, isScannerVisible = false) }
         }
     }
+
+
+
+    fun updatePendingConsumeUnits(units: Int) {
+        val item = _uiState.value.pendingConsumeItem ?: return
+        consumeUnits(item, units)
+    }
+
 
     fun cancelPendingConsume() {
         _uiState.update { it.copy(pendingConsumeItem = null) }
@@ -467,6 +616,7 @@ class PantryViewModel(
                 selectItem(updatedItem)
             } else {
                 val isOffUrl = imageUrl?.contains("openfoodfacts.org") == true
+                val inferredUnits = PantryItem.inferUnitsPerPack(name, packageQuantity)
                 val newItem = PantryItem(
                     id = "", // Will be assigned a temp ID in repository
                     name = name,
@@ -478,11 +628,14 @@ class PantryViewModel(
                     apiImageUrl = if (isOffUrl) imageUrl else null,
                     barcode = trimmedBarcode,
                     trackingType = trackingType,
+                    unitsPerPack = inferredUnits,
+                    activeCount = 1,
                     activeFill = FillLevel.FULL,
-                    sealedCount = 0
+                    sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) inferredUnits else 0
                 )
                 repository.addItem(newItem)
             }
+
             _uiState.update { it.copy(scannedProduct = null, isScannerVisible = false) }
         }
     }

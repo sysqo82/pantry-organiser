@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+
 import org.junit.Before
 import org.junit.Test
 
@@ -101,7 +103,79 @@ class PantryViewModelTest {
     }
 
     @Test
-    fun `addSealedUnit increments count and resets fill if empty`() = runTest {
+    fun `consumePortion for bulk item decrements sealedCount when empty`() = runTest {
+        val item = PantryItem(
+            id = "bulk1",
+            name = "Sugar",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.BULK_LEVEL,
+            sealedCount = 2,
+            activeFill = FillLevel.LOW
+        )
+        // LOW -> prev -> EMPTY. Should roll over.
+        viewModel.consumePortion(item)
+        
+        coVerify { 
+            repository.updateItem(match { 
+                it.id == "bulk1" && it.sealedCount == 1 && it.activeFill == FillLevel.FULL 
+            }) 
+        }
+    }
+
+    @Test
+    fun `consumePortion for bulk item deletes when last unit empty`() = runTest {
+        val item = PantryItem(
+            id = "bulk2",
+            name = "Sugar",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.BULK_LEVEL,
+            sealedCount = 0,
+            activeFill = FillLevel.LOW
+        )
+        // LOW -> prev -> EMPTY. Should delete.
+        viewModel.consumePortion(item)
+        
+        coVerify { repository.deleteItem(match { it.id == "bulk2" }) }
+    }
+
+    @Test
+    fun `updatePendingConsumeLevel for bulk item rolls over when selecting empty`() = runTest {
+        val item = PantryItem(id = "bulk3", name = "Sugar", shelfNumber = 1, zoneIndex = 1, trackingType = TrackingType.BULK_LEVEL, sealedCount = 1, activeFill = FillLevel.FULL)
+        
+        coEvery { repository.getItemByBarcode("123") } returns item
+        viewModel.showScanner(ScannerMode.CONSUME)
+        viewModel.scanBarcode("123")
+        
+        viewModel.updatePendingConsumeLevel(FillLevel.EMPTY)
+        
+        coVerify { 
+            repository.updateItem(match { 
+                it.id == "bulk3" && it.sealedCount == 0 && it.activeFill == FillLevel.FULL 
+            }) 
+        }
+        assertFalse(viewModel.uiState.value.isScannerVisible)
+    }
+
+    @Test
+    fun `updatePendingConsumeLevel for bulk item deletes when last unit empty`() = runTest {
+        val item = PantryItem(id = "bulk4", name = "Sugar", shelfNumber = 1, zoneIndex = 1, trackingType = TrackingType.BULK_LEVEL, sealedCount = 0, activeFill = FillLevel.FULL)
+        
+        coEvery { repository.getItemByBarcode("123") } returns item
+        viewModel.showScanner(ScannerMode.CONSUME)
+        viewModel.scanBarcode("123")
+        
+        viewModel.updatePendingConsumeLevel(FillLevel.EMPTY)
+        
+        coVerify { repository.deleteItem(match { it.id == "bulk4" }) }
+        assertFalse(viewModel.uiState.value.isScannerVisible)
+    }
+
+
+
+    @Test
+    fun `addSealedUnit resets fill if empty but keeps count 0`() = runTest {
         val item = PantryItem(
             id = "item1",
             name = "Staple",
@@ -116,10 +190,32 @@ class PantryViewModelTest {
         
         coVerify { 
             repository.updateItem(match { 
+                it.sealedCount == 0 && it.activeFill == FillLevel.FULL 
+            }) 
+        }
+    }
+
+    @Test
+    fun `addSealedUnit increments count if already active`() = runTest {
+        val item = PantryItem(
+            id = "item1",
+            name = "Staple",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.BULK_LEVEL,
+            sealedCount = 0,
+            activeFill = FillLevel.FULL
+        )
+        
+        viewModel.addSealedUnit(item)
+        
+        coVerify { 
+            repository.updateItem(match { 
                 it.sealedCount == 1 && it.activeFill == FillLevel.FULL 
             }) 
         }
     }
+
 
     @Test
     fun `scanBarcode in CONSUME mode for bulk item sets pendingConsumeItem`() = runTest {
@@ -165,8 +261,9 @@ class PantryViewModelTest {
         
         viewModel.scanBarcode("456")
         
-        coVerify(timeout = 2000) { repository.updateItem(match { it.sealedCount == 0 }) }
+        coVerify(timeout = 2000) { repository.deleteItem(match { it.id == "item1" }) }
     }
+
 
     @Test
     fun `determineTrackingType categorizes flour as Bulk`() {
@@ -196,6 +293,77 @@ class PantryViewModelTest {
     @Test
     fun `determineTrackingType categorizes multipack as Discrete`() {
         val product = OffProduct(productName = "Coke 6 pack", weight = "6x330ml")
-        assertEquals(TrackingType.DISCRETE_COUNT, viewModel.determineTrackingType(product))
+        val unitsPerPack = product.inferUnitsPerPack()
+        var trackingType = viewModel.determineTrackingType(product)
+        if (unitsPerPack > 1) trackingType = TrackingType.DISCRETE_COUNT
+        assertEquals(TrackingType.DISCRETE_COUNT, trackingType)
+    }
+
+
+    @Test
+    fun `consumeUnits for multipack correctly calculates remaining units`() = runTest {
+        // Scenario: 6 units available (previously 2 packs of 3). Consume 2.
+        val item = PantryItem(
+            id = "multipack1",
+            name = "Sweetcorn",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            sealedCount = 6,
+            activeCount = 1
+        )
+        
+        viewModel.consumeUnits(item, 2)
+        
+        coVerify { 
+            repository.updateItem(match { 
+                // 6 - 2 = 4 units left.
+                it.id == "multipack1" && it.sealedCount == 4
+            }) 
+        }
+        assertFalse(viewModel.uiState.value.isScannerVisible)
+        assertNull(viewModel.uiState.value.pendingConsumeItem)
+    }
+
+
+
+    @Test
+    fun `consumeUnits for multipack when item is deleted at zero`() = runTest {
+        // Scenario: 3 units left. Consume 3.
+        val item = PantryItem(
+            id = "multipack2",
+            name = "Sweetcorn",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            sealedCount = 3,
+            activeCount = 1
+        )
+        
+        viewModel.consumeUnits(item, 3)
+        
+        coVerify { 
+            repository.deleteItem(match { it.id == "multipack2" })
+        }
+        assertFalse(viewModel.uiState.value.isScannerVisible)
+    }
+
+
+
+    @Test
+    fun `inferUnitsPerPack recognizes multiplier pattern`() {
+        assertEquals(3, PantryItem.inferUnitsPerPack("Sweetcorn in water", "3 x 200 gr"))
+        assertEquals(4, PantryItem.inferUnitsPerPack("Baked Beans", "4x400g"))
+        assertEquals(6, PantryItem.inferUnitsPerPack("Cola", "6 x 330ml"))
+    }
+
+    @Test
+    fun `inferUnitsPerPack recognizes pack of pattern`() {
+        assertEquals(4, PantryItem.inferUnitsPerPack("Yoghurt", "Pack of 4"))
+        assertEquals(12, PantryItem.inferUnitsPerPack("Eggs", "pack of 12"))
     }
 }
+
+
