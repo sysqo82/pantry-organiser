@@ -35,16 +35,16 @@ fun EditItemBottomSheet(
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
 
-    var name by remember { mutableStateOf(item.name) }
-    var brand by remember { mutableStateOf(item.brand ?: "") }
-    var packageQuantity by remember { mutableStateOf(item.packageQuantity ?: "") }
-    var trackingType by remember { mutableStateOf(item.trackingType) }
-    var sealedCount by remember { mutableStateOf(item.sealedCount.toString()) }
-    var activeFill by remember { mutableStateOf(item.activeFill) }
+    var name by remember(item.id) { mutableStateOf(item.name) }
+    var brand by remember(item.id) { mutableStateOf(item.brand ?: "") }
+    var packageQuantity by remember(item.id) { mutableStateOf(item.packageQuantity ?: "") }
+    var trackingType by remember(item.id) { mutableStateOf(item.trackingType) }
+    var sealedCount by remember(item.id) { mutableStateOf(item.sealedCount.toString()) }
+    var activeFill by remember(item.id) { mutableStateOf(item.activeFill) }
     
     // Map 1..4 shelf number to 0..3 UI row with clamping
-    var selectedRow by remember { mutableIntStateOf((4 - item.shelfNumber.coerceIn(1, 4)).coerceIn(0, 3)) }
-    var selectedCol by remember { mutableIntStateOf((item.zoneIndex.coerceIn(1, 3) - 1).coerceIn(0, 2)) }
+    var selectedRow by remember(item.id) { mutableIntStateOf((4 - item.shelfNumber.coerceIn(1, 4)).coerceIn(0, 3)) }
+    var selectedCol by remember(item.id) { mutableIntStateOf((item.zoneIndex.coerceIn(1, 3) - 1).coerceIn(0, 2)) }
     
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -74,23 +74,18 @@ fun EditItemBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Preview with API Priority
-                // We detect if the "custom" imageUrl is actually an OFF link and treat it as apiImageUrl
-                val effectiveApiUrl = item.apiImageUrl ?: item.imageUrl?.takeIf { it.contains("openfoodfacts.org") }
-                val effectiveCustomUrl = if (item.imageUrl?.contains("openfoodfacts.org") == true) null else item.imageUrl
-
                 ProductThumbnail(
-                    imageUrl = effectiveCustomUrl,
-                    apiImageUrl = effectiveApiUrl,
+                    imageUrl = item.imageUrl,
+                    apiImageUrl = item.apiImageUrl,
                     localImageUri = item.localImageUri,
                     itemName = name,
                     updatedAt = item.updatedAt,
                     thumbnailSize = 120.dp
                 )
                 
-                // Show Restore if we have a custom local photo OR a custom remote photo, AND an API image exists
-                val hasCustomPhoto = item.localImageUri != null || (item.imageUrl != null && item.imageUrl.contains("openfoodfacts.org") == false)
-                val hasOriginalImage = effectiveApiUrl != null
+                // Show Restore if we have a custom photo (local or remote) AND an API image to restore to
+                val hasCustomPhoto = item.localImageUri != null || (item.imageUrl != null && !item.imageUrl.contains("openfoodfacts.org"))
+                val hasOriginalImage = item.apiImageUrl != null
                 
                 if (!isReadOnly && hasCustomPhoto && hasOriginalImage) {
                     Spacer(Modifier.height(8.dp))

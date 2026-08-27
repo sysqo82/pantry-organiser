@@ -47,9 +47,9 @@ fun ProductThumbnail(
     val validRemoteUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
     val validApiUrl = apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
 
-    // PRIORITY: 1. API Image (Best Quality), 2. Local Camera Photo, 3. Remote Uploaded Photo
+    // PRIORITY: 1. Local Camera Photo, 2. Remote Uploaded Photo, 3. API Image (Fallback)
     var imageSource by remember(validLocalUri, validRemoteUrl, validApiUrl) { 
-        mutableStateOf(validApiUrl ?: validLocalUri ?: validRemoteUrl) 
+        mutableStateOf(validLocalUri ?: validRemoteUrl ?: validApiUrl) 
     }
     
     // Keep track of failed URIs in this session to avoid retrying them
@@ -57,7 +57,7 @@ fun ProductThumbnail(
 
     // Effect to reset imageSource if inputs change
     LaunchedEffect(validLocalUri, validRemoteUrl, validApiUrl, updatedAt) {
-        val bestSource = validApiUrl ?: validLocalUri ?: validRemoteUrl
+        val bestSource = validLocalUri ?: validRemoteUrl ?: validApiUrl
         
         if (updatedAt != 0L) {
             failedUris.clear()
@@ -104,14 +104,14 @@ fun ProductThumbnail(
                     
                     imageSource?.let { failedUris.add(it) }
 
-                    // FALLBACK CHAIN: API -> LOCAL -> REMOTE
+                    // FALLBACK CHAIN: LOCAL -> REMOTE -> API
                     when (imageSource) {
-                        validApiUrl -> {
-                            val next = validLocalUri ?: validRemoteUrl
+                        validLocalUri -> {
+                            val next = validRemoteUrl ?: validApiUrl
                             if (next != null && !failedUris.contains(next)) imageSource = next else imageSource = null
                         }
-                        validLocalUri -> {
-                            if (validRemoteUrl != null && !failedUris.contains(validRemoteUrl)) imageSource = validRemoteUrl else imageSource = null
+                        validRemoteUrl -> {
+                            if (validApiUrl != null && !failedUris.contains(validApiUrl)) imageSource = validApiUrl else imageSource = null
                         }
                         else -> {
                             imageSource = null

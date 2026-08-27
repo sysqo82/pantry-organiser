@@ -241,6 +241,7 @@ fun ScannerView(
                                 ) {
                                     ProductThumbnail(
                                         imageUrl = item.imageUrl,
+                                        apiImageUrl = item.apiImageUrl,
                                         localImageUri = item.localImageUri,
                                         itemName = item.name,
                                         updatedAt = item.updatedAt,
@@ -386,6 +387,7 @@ fun ScannerView(
                                 ) {
                                     ProductThumbnail(
                                         imageUrl = item.imageUrl,
+                                        apiImageUrl = item.apiImageUrl,
                                         localImageUri = item.localImageUri,
                                         itemName = item.name,
                                         updatedAt = item.updatedAt,

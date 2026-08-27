@@ -51,6 +51,7 @@ fun PantryShelfGrid(
                         label = getCellLabel(row, col),
                         isSelected = isSelected,
                         imageUrl = if (isItemLocation) highlightedItem?.imageUrl else null,
+                        apiImageUrl = if (isItemLocation) highlightedItem?.apiImageUrl else null,
                         localImageUri = if (isItemLocation) highlightedItem?.localImageUri else null,
                         itemInitial = if (isItemLocation) highlightedItem?.name?.take(1)?.uppercase() else null,
                         updatedAt = if (isItemLocation) highlightedItem?.updatedAt ?: 0L else 0L,
@@ -68,13 +69,14 @@ fun ShelfCell(
     label: String,
     isSelected: Boolean,
     imageUrl: String? = null,
+    apiImageUrl: String? = null,
     localImageUri: String? = null,
     itemInitial: String? = null,
     updatedAt: Long = 0L,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isShowingItem = imageUrl != null || localImageUri != null || itemInitial != null
+    val isShowingItem = imageUrl != null || apiImageUrl != null || localImageUri != null || itemInitial != null
 
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
@@ -105,6 +107,7 @@ fun ShelfCell(
         if (isShowingItem) {
             ProductThumbnail(
                 imageUrl = imageUrl,
+                apiImageUrl = apiImageUrl,
                 localImageUri = localImageUri,
                 itemName = itemInitial ?: "",
                 thumbnailSize = null,
