@@ -94,7 +94,8 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         barcode = barcode,
         brand = brand,
         packageQuantity = packageQuantity,
-        imageUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" },
+        imageUrl = apiImageUrl ?: imageUrl?.takeIf { it.isNotBlank() && it != "N/A" },
+        image = if (imageUrl == null) "" else null, // Explicitly clear PB file field if imageUrl is null (Restore case)
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
         trackingType = enforcedTrackingType.name,
@@ -107,13 +108,14 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val updatedAtTime = parsePocketBaseDate(updated)
     val createdAtTime = parsePocketBaseDate(created)
     
-    val remoteImageUrl = if (!image.isNullOrEmpty() && id != null) {
-        // Append version parameter to force cache refresh when image is replaced
+    // The "image" field in PB holds the custom upload
+    val customImageUrl = if (!image.isNullOrEmpty() && id != null) {
         val base = "$POCKETBASE_URL/api/files/pantry_items/$id/$image"
         if (updatedAtTime > 0) "$base?v=$updatedAtTime" else base
-    } else {
-        imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
-    }
+    } else null
+
+    // The "image_url" field in PB holds the original OFF link
+    val originalApiUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
 
     val mappedShelf = shelfNumber.coerceIn(1, 4)
     val mappedZone = zoneIndex.coerceIn(1, 3)
@@ -130,7 +132,8 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         barcode = barcode,
         brand = brand,
         packageQuantity = packageQuantity,
-        imageUrl = remoteImageUrl,
+        imageUrl = customImageUrl, // Custom Photo from PB
+        apiImageUrl = originalApiUrl, // Original Photo from API
         localImageUri = null, 
         shelfNumber = mappedShelf,
         zoneIndex = mappedZone,

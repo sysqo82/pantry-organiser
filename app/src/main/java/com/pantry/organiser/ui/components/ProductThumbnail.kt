@@ -33,7 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun ProductThumbnail(
     imageUrl: String?,
-    localImageUri: String?,
+    apiImageUrl: String? = null, // New field for API-first priority
+    localImageUri: String? = null,
     itemName: String,
     modifier: Modifier = Modifier,
     thumbnailSize: Dp? = 64.dp,
@@ -44,29 +45,26 @@ fun ProductThumbnail(
     // Normalize inputs
     val validLocalUri = localImageUri?.takeIf { it.isNotBlank() && it != "N/A" }
     val validRemoteUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+    val validApiUrl = apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
 
-    // Track which source we are currently trying to load. 
-    var imageSource by remember(validLocalUri, validRemoteUrl) { 
-        mutableStateOf(validLocalUri ?: validRemoteUrl) 
+    // PRIORITY: 1. API Image (Best Quality), 2. Local Camera Photo, 3. Remote Uploaded Photo
+    var imageSource by remember(validLocalUri, validRemoteUrl, validApiUrl) { 
+        mutableStateOf(validApiUrl ?: validLocalUri ?: validRemoteUrl) 
     }
     
     // Keep track of failed URIs in this session to avoid retrying them
     val failedUris = remember { mutableSetOf<String>() }
 
-    // Effect to reset imageSource if inputs change (e.g. after sync updates the record)
-    LaunchedEffect(validLocalUri, validRemoteUrl, updatedAt) {
-        val bestSource = validLocalUri ?: validRemoteUrl
+    // Effect to reset imageSource if inputs change
+    LaunchedEffect(validLocalUri, validRemoteUrl, validApiUrl, updatedAt) {
+        val bestSource = validApiUrl ?: validLocalUri ?: validRemoteUrl
         
-        // If updatedAt changed, we should allow retrying previously failed URIs
-        // because a new photo might have been uploaded to the same URL/path.
         if (updatedAt != 0L) {
             failedUris.clear()
         }
 
-        // Even if validRemoteUrl string is technically the same, we want to re-evaluate 
-        // because it now contains the version parameter from toLocal()
         if (imageSource != bestSource && !failedUris.contains(bestSource)) {
-            android.util.Log.d("ProductThumbnail", "[$itemName] Update detected (v=$updatedAt). New source: $bestSource")
+            android.util.Log.d("ProductThumbnail", "[$itemName] Update detected. New source: $bestSource")
             imageSource = bestSource
         }
     }
@@ -106,20 +104,18 @@ fun ProductThumbnail(
                     
                     imageSource?.let { failedUris.add(it) }
 
-                    // If local image fails (e.g. file not found on synced device)
-                    // and we have a remote fallback URL, switch to it.
-                    if (imageSource == validLocalUri) {
-                        if (validRemoteUrl != null && !failedUris.contains(validRemoteUrl)) {
-                            android.util.Log.d("ProductThumbnail", "[$itemName] Falling back to remote URL: $validRemoteUrl")
-                            imageSource = validRemoteUrl
-                        } else {
-                            android.util.Log.d("ProductThumbnail", "[$itemName] No remote fallback available (Remote URL: $validRemoteUrl, Failed: ${failedUris.contains(validRemoteUrl)})")
+                    // FALLBACK CHAIN: API -> LOCAL -> REMOTE
+                    when (imageSource) {
+                        validApiUrl -> {
+                            val next = validLocalUri ?: validRemoteUrl
+                            if (next != null && !failedUris.contains(next)) imageSource = next else imageSource = null
+                        }
+                        validLocalUri -> {
+                            if (validRemoteUrl != null && !failedUris.contains(validRemoteUrl)) imageSource = validRemoteUrl else imageSource = null
+                        }
+                        else -> {
                             imageSource = null
                         }
-                    } else {
-                        // Both failed or no fallback, clear source to show placeholder
-                        android.util.Log.d("ProductThumbnail", "[$itemName] Both sources failed or no fallback available.")
-                        imageSource = null
                     }
                 }
             )

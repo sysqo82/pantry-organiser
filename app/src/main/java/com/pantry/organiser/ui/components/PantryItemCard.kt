@@ -30,6 +30,7 @@ import com.pantry.organiser.data.TrackingType
 fun PantryItemCard(
     item: PantryItem,
     isHighlighted: Boolean,
+    isReadOnly: Boolean, // New parameter for Device-Role enforcement
     onConsume: () -> Unit,
     onAddSealed: () -> Unit,
     onRemoveSealed: () -> Unit,
@@ -66,6 +67,7 @@ fun PantryItemCard(
         ) {
             ProductThumbnail(
                 imageUrl = item.imageUrl,
+                apiImageUrl = item.apiImageUrl, // High priority source
                 localImageUri = item.localImageUri,
                 itemName = item.name,
                 updatedAt = item.updatedAt,
@@ -109,40 +111,68 @@ fun PantryItemCard(
                 }
             }
 
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                // Sealed Pill
-                SealedStockPill(
-                    count = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.sealedCount + 1 else item.sealedCount,
-                    label = if (item.trackingType == TrackingType.DISCRETE_COUNT) "Count" else "Sealed",
-                    onAdd = onAddSealed,
-                    onRemove = onRemoveSealed
-                )
-
-                // Active Fill Control (Only for Staples)
-                if (item.trackingType == TrackingType.BULK_LEVEL) {
-                    ActiveFillControl(
-                        fillLevel = item.activeFill,
-                        onConsume = onConsume,
-                        onRefill = onIncrementFill
+            if (!isReadOnly) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Sealed Pill
+                    SealedStockPill(
+                        count = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.sealedCount + 1 else item.sealedCount,
+                        label = if (item.trackingType == TrackingType.DISCRETE_COUNT) "Count" else "Sealed",
+                        onAdd = onAddSealed,
+                        onRemove = onRemoveSealed
                     )
-                } else {
-                    // For discrete items, a simple Consume button
-                    Button(
-                        onClick = onConsume,
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+
+                    // Active Fill Control (Only for Staples)
+                    if (item.trackingType == TrackingType.BULK_LEVEL) {
+                        ActiveFillControl(
+                            fillLevel = item.activeFill,
+                            onConsume = onConsume,
+                            onRefill = onIncrementFill
                         )
+                    } else {
+                        // For discrete items, a simple Consume button
+                        Button(
+                            onClick = onConsume,
+                            modifier = Modifier.height(32.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Consume", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            } else {
+                // Read-Only Summary View
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    val count = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.sealedCount + 1 else item.sealedCount
+                    val label = if (item.trackingType == TrackingType.DISCRETE_COUNT) "Count" else "Sealed"
+                    
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = CircleShape
                     ) {
-                        Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Consume", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            text = "$count $label",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    if (item.trackingType == TrackingType.BULK_LEVEL) {
+                        Spacer(Modifier.height(4.dp))
+                        FillLevelBadge(item.activeFill)
                     }
                 }
             }

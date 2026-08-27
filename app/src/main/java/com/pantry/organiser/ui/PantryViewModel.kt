@@ -24,7 +24,8 @@ data class PantryUiState(
     val scannerMode: ScannerMode = ScannerMode.RESTOCK,
     val photoCaptureItem: PantryItem? = null,
     val pendingNewItem: PantryItem? = null,
-    val pendingConsumeItem: PantryItem? = null
+    val pendingConsumeItem: PantryItem? = null,
+    val isReadOnly: Boolean = false // Device-level capability lock
 )
 
 class PantryViewModel(
@@ -62,6 +63,10 @@ class PantryViewModel(
         }
     }
 
+    fun setReadOnly(readOnly: Boolean) {
+        _uiState.update { it.copy(isReadOnly = readOnly) }
+    }
+
     fun selectItem(item: PantryItem) {
         _uiState.update { 
             val isAlreadyHighlighted = it.highlightedItemId == item.id
@@ -80,6 +85,7 @@ class PantryViewModel(
     }
 
     fun consumePortion(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             if (item.trackingType == TrackingType.DISCRETE_COUNT) {
                 // Discrete logic:
@@ -130,6 +136,7 @@ class PantryViewModel(
     }
 
     fun addSealedUnit(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             var updatedItem = item.copy(
                 sealedCount = item.sealedCount + 1,
@@ -143,6 +150,7 @@ class PantryViewModel(
     }
 
     fun removeSealedUnit(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             if (item.sealedCount > 0) {
                 repository.updateItem(item.copy(
@@ -154,6 +162,7 @@ class PantryViewModel(
     }
 
     fun incrementActiveFill(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             val nextFill = item.activeFill.next()
             repository.updateItem(item.copy(
@@ -186,6 +195,7 @@ class PantryViewModel(
     }
 
     fun updateItem(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             repository.updateItem(item.copy(updatedAt = System.currentTimeMillis()))
             clearEditingItem()
@@ -193,9 +203,21 @@ class PantryViewModel(
     }
 
     fun deleteItem(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             repository.deleteItem(item)
             clearEditingItem()
+        }
+    }
+
+    fun restoreApiImage(item: PantryItem) {
+        if (_uiState.value.isReadOnly) return
+        viewModelScope.launch {
+            // Clear both local path and remote custom URL to force fallback to apiImageUrl
+            val updated = item.copy(localImageUri = null, imageUrl = null, updatedAt = System.currentTimeMillis())
+            repository.updateItem(updated)
+            clearEditingItem()
+            _uiState.update { it.copy(userNotification = "Restored API image for ${item.name}") }
         }
     }
 
@@ -268,7 +290,7 @@ class PantryViewModel(
 
                 // 2. Consume Mode Fail-Fast
                 if (_uiState.value.scannerMode == ScannerMode.CONSUME) {
-                    _uiState.update { it.copy(error = "Item not in pantry") }
+                    _uiState.update { it.copy(error = "Item not in organiser") }
                     isProcessingScan = false // UNLOCK IMMEDIATELY
                     kotlinx.coroutines.delay(2000)
                     _uiState.update { it.copy(error = null) }
@@ -289,7 +311,8 @@ class PantryViewModel(
                         packageQuantity = product.weight ?: "",
                         shelfNumber = 1,
                         zoneIndex = 1,
-                        imageUrl = product.imageUrl,
+                        imageUrl = null, // No custom image yet
+                        apiImageUrl = product.imageUrl, // Capture official API image
                         barcode = trimmedBarcode,
                         trackingType = trackingType,
                         activeFill = FillLevel.FULL,
@@ -312,6 +335,16 @@ class PantryViewModel(
     }
 
     private suspend fun handleExistingItemScan(item: PantryItem) {
+        if (_uiState.value.isReadOnly) {
+            // Read-Only mode just highlights the item (Identity Lookup)
+            selectItem(item)
+            val label = getCellLabel((4 - item.shelfNumber).coerceIn(0, 3), (item.zoneIndex - 1).coerceIn(0, 2))
+            _uiState.update { it.copy(userNotification = "Found: ${item.name} at $label", recognizedItem = item) }
+            kotlinx.coroutines.delay(800)
+            _uiState.update { it.copy(recognizedItem = null) }
+            return
+        }
+
         if (_uiState.value.scannerMode == ScannerMode.CONSUME) {
             if (item.trackingType == TrackingType.BULK_LEVEL) {
                 _uiState.update { it.copy(pendingConsumeItem = item) }
@@ -346,6 +379,7 @@ class PantryViewModel(
     }
 
     fun assignPendingItemShelf(row: Int, col: Int) {
+        if (_uiState.value.isReadOnly) return
         val pending = _uiState.value.pendingNewItem ?: return
         viewModelScope.launch {
             // Map Row 3 (Bottom) to Shelf 1. Standard mapping: (4 - row)
@@ -388,6 +422,7 @@ class PantryViewModel(
         barcode: String?,
         trackingType: TrackingType
     ) {
+        if (_uiState.value.isReadOnly) return
         val trimmedBarcode = barcode?.trim()?.takeIf { it.isNotEmpty() }
         
         viewModelScope.launch {
@@ -424,6 +459,7 @@ class PantryViewModel(
                     shelfNumber = shelfNumber.coerceIn(1, 4),
                     zoneIndex = zoneIndex.coerceIn(1, 3),
                     imageUrl = imageUrl,
+                    apiImageUrl = null, // Manual items have no API image
                     barcode = trimmedBarcode,
                     trackingType = trackingType,
                     activeFill = FillLevel.FULL,
