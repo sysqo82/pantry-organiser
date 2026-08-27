@@ -38,6 +38,8 @@ fun EditItemBottomSheet(
     var name by remember(item.id) { mutableStateOf(item.name) }
     var brand by remember(item.id) { mutableStateOf(item.brand ?: "") }
     var packageQuantity by remember(item.id) { mutableStateOf(item.packageQuantity ?: "") }
+    var unitsPerPack by remember(item.id) { mutableStateOf(item.unitsPerPack.toString()) }
+    var activeCount by remember(item.id) { mutableStateOf(item.activeCount.toString()) }
     var trackingType by remember(item.id) { mutableStateOf(item.trackingType) }
     var sealedCount by remember(item.id) { mutableStateOf(item.sealedCount.toString()) }
     var activeFill by remember(item.id) { mutableStateOf(item.activeFill) }
@@ -140,6 +142,27 @@ fun EditItemBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                OutlinedTextField(
+                    value = unitsPerPack,
+                    onValueChange = { if (it.all { char -> char.isDigit() }) unitsPerPack = it },
+                    label = { Text("Units per pack / Bundle size") },
+                    placeholder = { Text("e.g. 4 for a 4-pack") },
+                    enabled = !isReadOnly,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                if ((unitsPerPack.toIntOrNull() ?: 1) > 1) {
+                    OutlinedTextField(
+                        value = activeCount,
+                        onValueChange = { if (it.all { char -> char.isDigit() }) activeCount = it },
+                        label = { Text("Units left in active pack") },
+                        enabled = !isReadOnly,
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 Text("Tracking Mode", style = MaterialTheme.typography.titleMedium)
@@ -230,6 +253,8 @@ fun EditItemBottomSheet(
                                 name = name,
                                 brand = brand,
                                 packageQuantity = packageQuantity,
+                                unitsPerPack = unitsPerPack.toIntOrNull() ?: 1,
+                                activeCount = activeCount.toIntOrNull() ?: 1,
                                 trackingType = trackingType,
                                 sealedCount = sealedCount.toIntOrNull() ?: 0,
                                 activeFill = activeFill,

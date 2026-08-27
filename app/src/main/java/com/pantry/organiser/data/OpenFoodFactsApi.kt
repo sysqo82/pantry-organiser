@@ -34,7 +34,13 @@ data class OffProduct(
 ) {
     val displayProductName: String? get() = productName ?: productNameEn ?: genericName
     val displayBrands: String? get() = brands ?: brandOwner
+
+    /**
+     * Heuristic to extract bundle size (e.g. "4 x 100g", "3x80g", "4x 200ml", "4 Pack", "Pack of 6")
+     */
+    fun inferUnitsPerPack(): Int = PantryItem.inferUnitsPerPack(displayProductName, weight)
 }
+
 
 class OpenFoodFactsRepository {
     private val client = HttpClient(OkHttp) {

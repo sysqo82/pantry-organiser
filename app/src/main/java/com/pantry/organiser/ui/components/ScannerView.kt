@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,7 +76,9 @@ fun ScannerView(
     onAssignShelf: (Int, Int) -> Unit,
     onCancelPending: () -> Unit,
     onUpdateConsumeLevel: (FillLevel) -> Unit,
+    onUpdateConsumeUnits: (Int) -> Unit,
     onCancelConsume: () -> Unit,
+
     onSave: (String, String, String, Int, Int, String?, String?, TrackingType) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -127,9 +131,6 @@ fun ScannerView(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
-                detectTapGestures { timerKey++ } 
-            }
     ) {
         // LAYER 0: BASE LAYER (Camera) - Persistent static background
         CameraPreview(
@@ -141,6 +142,14 @@ fun ScannerView(
                 }
             }
         )
+
+        // Activity detector to reset timer on any touch that isn't handled by children
+        Box(
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures { timerKey++ }
+            }
+        )
+
 
         // LAYER 0.5: SCREEN LIGHT OVERLAY
         AnimatedVisibility(
@@ -211,7 +220,7 @@ fun ScannerView(
             contentAlignment = Alignment.Center
         ) {
             // ... (pendingConsumeItem, scannedProduct, pendingNewItem AnimatedVisibility blocks remain same)
-            // Overlay for Staples Consumption
+            // Overlay for Staples or Multipack Consumption
             AnimatedVisibility(
                 visible = pendingConsumeItem != null,
                 enter = overlayEnter,
@@ -250,39 +259,138 @@ fun ScannerView(
                                     Spacer(Modifier.width(16.dp))
                                     Column {
                                         Text(item.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
-                                        Text("Current: ${item.activeFill.label}", color = Color.White.copy(alpha = 0.7f))
+                                        if (item.unitsPerPack > 1) {
+                                            val totalUnits = if (item.sealedCount == 1) item.unitsPerPack else item.sealedCount
+                                            Text("$totalUnits total units remaining", color = Color.White.copy(alpha = 0.7f))
+                                        } else {
+                                            Text("Current: ${item.activeFill.label}", color = Color.White.copy(alpha = 0.7f))
+                                        }
+
                                     }
                                 }
                             }
 
-                            Text("How much is left?", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                            if (item.unitsPerPack > 1) {
+                                Text("How many taken?", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                
+                                val totalAvailable = if (item.sealedCount == 1) item.unitsPerPack else item.sealedCount
+                                // Key on item.id ONLY. Do not reset when totalAvailable flickers (e.g. background discovery)
+                                var unitsTaken by remember(item.id) { mutableIntStateOf(1) }
+                                
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        // Minus Button
+                                        Button(
+                                            onClick = { 
+                                                if (unitsTaken > 1) { 
+                                                    unitsTaken--
+                                                    timerKey++ 
+                                                } 
+                                            },
+                                            modifier = Modifier.size(80.dp),
+                                            shape = CircleShape,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color.White.copy(alpha = 0.2f),
+                                                contentColor = Color.White
+                                            ),
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Icon(Icons.Default.Remove, "Less", modifier = Modifier.size(40.dp))
+                                        }
+                                        
+                                        Surface(
+                                            color = Color.White.copy(alpha = 0.1f),
+                                            shape = RoundedCornerShape(24.dp),
+                                            modifier = Modifier.padding(horizontal = 24.dp).widthIn(min = 120.dp)
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                                                Text(
+                                                    text = unitsTaken.toString(),
+                                                    style = MaterialTheme.typography.displayLarge,
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Black
+                                                )
+                                                Text(
+                                                    text = "of $totalAvailable",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = Color.White.copy(alpha = 0.6f)
+                                                )
+                                            }
+                                        }
 
-                            var selectedLevel by remember(item) { mutableStateOf(item.activeFill) }
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                FillLevel.entries.forEach { level ->
-                                    FilterChip(
-                                        selected = selectedLevel == level,
-                                        onClick = { selectedLevel = level; timerKey++ },
-                                        label = { Text(level.label) },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                            selectedLabelColor = Color.White,
-                                            labelColor = Color.White.copy(alpha = 0.7f)
-                                        )
-                                    )
+                                        // Plus Button
+                                        Button(
+                                            onClick = { 
+                                                if (unitsTaken < totalAvailable) { 
+                                                    unitsTaken++
+                                                    timerKey++ 
+                                                } 
+                                            },
+                                            modifier = Modifier.size(80.dp),
+                                            shape = CircleShape,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = Color.White.copy(alpha = 0.2f),
+                                                contentColor = Color.White
+                                            ),
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Icon(Icons.Default.Add, "More", modifier = Modifier.size(40.dp))
+                                        }
+                                    }
+
+
+
+                                    
+                                    Spacer(Modifier.height(32.dp))
+                                    
+                                    Button(
+                                        onClick = { 
+                                            android.util.Log.d("ScannerView", "Confirming removal of $unitsTaken units")
+                                            onUpdateConsumeUnits(unitsTaken) 
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(72.dp),
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow, contentColor = Color.Black)
+                                    ) {
+                                        Text("Confirm Removal", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                            }
+                            } else {
 
-                            Button(
-                                onClick = { onUpdateConsumeLevel(selectedLevel) },
-                                modifier = Modifier.fillMaxWidth().height(56.dp)
-                            ) {
-                                Text("Update Stock")
+
+                                Text("How much is left?", color = Color.Yellow, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+                                var selectedLevel by remember(item) { mutableStateOf(item.activeFill) }
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    FillLevel.entries.forEach { level ->
+                                        FilterChip(
+                                            selected = selectedLevel == level,
+                                            onClick = { selectedLevel = level; timerKey++ },
+                                            label = { Text(level.label) },
+                                            colors = FilterChipDefaults.filterChipColors(
+                                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                                selectedLabelColor = Color.White,
+                                                labelColor = Color.White.copy(alpha = 0.7f)
+                                            )
+                                        )
+                                    }
+                                }
+
+                                Button(
+                                    onClick = { onUpdateConsumeLevel(selectedLevel) },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                                ) {
+                                    Text("Update Stock")
+                                }
                             }
 
                             TextButton(onClick = onCancelConsume, colors = ButtonDefaults.textButtonColors(contentColor = Color.White)) {
@@ -292,6 +400,7 @@ fun ScannerView(
                     }
                 }
             }
+
 
             // Overlay for Manual Entry Form
             AnimatedVisibility(
@@ -396,7 +505,24 @@ fun ScannerView(
                                     Spacer(Modifier.width(16.dp))
                                     Column {
                                         Text(item.name, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1)
-                                        Text(item.brand ?: "", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(item.brand ?: "", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                            if (item.unitsPerPack > 1) {
+                                                Spacer(Modifier.width(8.dp))
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                                    shape = RoundedCornerShape(4.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "${item.unitsPerPack}-PACK",
+                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Black,
+                                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

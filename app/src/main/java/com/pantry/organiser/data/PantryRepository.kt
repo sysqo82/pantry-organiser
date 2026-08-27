@@ -65,7 +65,23 @@ class PantryRepository @JvmOverloads constructor(
                     needsUpdate = true
                 }
 
-                // 5. API Image Fix-up: Move OFF links from old imageUrl field to apiImageUrl if missing
+                // 5. Multipack Heuristic Fix
+                if (updatedItem.unitsPerPack <= 1) {
+                    val inferred = PantryItem.inferUnitsPerPack(updatedItem.name, updatedItem.packageQuantity)
+                    if (inferred > 1) {
+                        updatedItem = updatedItem.copy(
+                            unitsPerPack = inferred,
+                            // Only upgrade count if it was a single item (1) AND we're discovering it for the first time
+                            activeCount = if (updatedItem.activeCount <= 1) inferred else updatedItem.activeCount
+                        )
+                        needsUpdate = true
+                        android.util.Log.i("PantryRepository", "Retroactively fixing multipack for: ${item.name} ($inferred-pack)")
+                    }
+                }
+
+
+                // 6. API Image Fix-up: Move OFF links from old imageUrl field to apiImageUrl if missing
+
                 val currentImageUrl = item.imageUrl ?: ""
                 if (item.apiImageUrl == null && currentImageUrl.contains("openfoodfacts.org")) {
                     android.util.Log.i("PantryRepository", "Fixing API image field for: ${item.name}")
@@ -249,6 +265,18 @@ class PantryRepository @JvmOverloads constructor(
             finalItem = finalItem.copy(trackingType = TrackingType.BULK_LEVEL)
             android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} corrected to Staple mode.")
         }
+
+        // Multipack Fallback: If server says 1 but name/quantity suggests more, fix it
+        if (finalItem.unitsPerPack <= 1) {
+            val inferred = PantryItem.inferUnitsPerPack(finalItem.name, finalItem.packageQuantity)
+            if (inferred > 1) {
+                // IMPORTANT: We trust the server's activeCount. 
+                // We only upgrade unitsPerPack to enable multipack UI behavior.
+                finalItem = finalItem.copy(unitsPerPack = inferred)
+                android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} unitsPerPack corrected to $inferred.")
+            }
+        }
+
         
         // CONTENT-BASED COMPARISON: Only skip if core fields are identical.
         if (existing != null && 
@@ -261,10 +289,13 @@ class PantryRepository @JvmOverloads constructor(
             existing.zoneIndex == finalItem.zoneIndex &&
             existing.trackingType == finalItem.trackingType &&
             existing.imageUrl == finalItem.imageUrl &&
-            existing.apiImageUrl == finalItem.apiImageUrl
+            existing.apiImageUrl == finalItem.apiImageUrl &&
+            existing.unitsPerPack == finalItem.unitsPerPack &&
+            existing.activeCount == finalItem.activeCount
         ) {
             return
         }
+
 
         // PHOTO SYNC LOGIC: If the remote URL has changed, it means a new photo was uploaded.
         // We compare the full URL which includes the 'v' (version) timestamp from PocketBase.
