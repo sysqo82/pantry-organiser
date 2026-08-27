@@ -51,7 +51,8 @@ data class PantryItem(
     @ColumnInfo(name = "barcode") val barcode: String? = null,
     @ColumnInfo(name = "brand") val brand: String? = null,
     @ColumnInfo(name = "package_quantity") val packageQuantity: String? = null,
-    @ColumnInfo(name = "image_url") val imageUrl: String? = null,
+    @ColumnInfo(name = "image_url") val imageUrl: String? = null, // Custom/File URL
+    @ColumnInfo(name = "api_image_url") val apiImageUrl: String? = null, // Original OFF URL
     @ColumnInfo(name = "local_image_uri") val localImageUri: String? = null,
     @ColumnInfo(name = "shelf_number") val shelfNumber: Int, // 1 to 4 (S1 to S4)
     @ColumnInfo(name = "zone_index") val zoneIndex: Int,     // 1: Left, 2: Mid, 3: Right

@@ -8,11 +8,11 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
-class PantryRepository(
+class PantryRepository @JvmOverloads constructor(
     private val pantryDao: PantryDao,
-    private val filesDir: File? = null,
     private val pocketBaseApi: PocketBaseApi = PocketBaseApi(),
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val filesDir: File? = null
 ) {
     val allItems: Flow<List<PantryItem>> = pantryDao.getAllItems()
 
@@ -53,10 +53,23 @@ class PantryRepository(
 
                 // 4. Retroactive Staple Fix: Force items like "Sugar" or "Flour" to BULK_LEVEL
                 val nameLower = item.name.lowercase()
-                val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil")
-                if (item.trackingType == TrackingType.DISCRETE_COUNT && stapleKeywords.any { nameLower.contains(it) }) {
+                val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
+                val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
+                
+                if (item.trackingType == TrackingType.DISCRETE_COUNT && 
+                    stapleKeywords.any { nameLower.contains(it) } &&
+                    discreteKeywords.none { nameLower.contains(it) }
+                ) {
                     android.util.Log.i("PantryRepository", "Retroactively fixing tracking type for staple: ${item.name}")
                     updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
+                    needsUpdate = true
+                }
+
+                // 5. API Image Fix-up: Move OFF links from old imageUrl field to apiImageUrl if missing
+                val currentImageUrl = item.imageUrl ?: ""
+                if (item.apiImageUrl == null && currentImageUrl.contains("openfoodfacts.org")) {
+                    android.util.Log.i("PantryRepository", "Fixing API image field for: ${item.name}")
+                    updatedItem = updatedItem.copy(apiImageUrl = currentImageUrl, imageUrl = null)
                     needsUpdate = true
                 }
 
@@ -68,7 +81,7 @@ class PantryRepository(
         }
 
         // Start Realtime Subscription
-        pocketBaseApi.startRealtimeSync(scope)
+        startRealtimeSync()
         
         // Listen for Realtime Events
         scope.launch {
@@ -212,6 +225,14 @@ class PantryRepository(
         return pantryDao.getItemByBarcode(barcode)
     }
 
+    fun startRealtimeSync() {
+        pocketBaseApi.startRealtimeSync(scope)
+    }
+
+    fun stopRealtimeSync() {
+        pocketBaseApi.stopRealtimeSync()
+    }
+
     private suspend fun mergeAndInsert(remoteItem: PantryItem) {
         val existing = pantryDao.getItemById(remoteItem.id)
         
@@ -239,15 +260,24 @@ class PantryRepository(
             existing.shelfNumber == finalItem.shelfNumber &&
             existing.zoneIndex == finalItem.zoneIndex &&
             existing.trackingType == finalItem.trackingType &&
-            existing.imageUrl == finalItem.imageUrl
+            existing.imageUrl == finalItem.imageUrl &&
+            existing.apiImageUrl == finalItem.apiImageUrl
         ) {
             return
         }
 
-        // Sanitize local path logic
-        val sanitizedUri = existing?.localImageUri?.takeIf { it.isNotBlank() && !it.contains("/cache/") && File(it).exists() }
+        // PHOTO SYNC LOGIC: If the remote URL has changed, it means a new photo was uploaded.
+        // In this case, we MUST discard the local image URI to force the UI to show the new remote photo.
+        val hasPhotoChanged = existing != null && existing.imageUrl != finalItem.imageUrl
+        
+        val sanitizedUri = if (hasPhotoChanged) {
+            android.util.Log.i("PantryRepository", "Photo update detected for ${finalItem.name}. Discarding local cache.")
+            null
+        } else {
+            existing?.localImageUri?.takeIf { it.isNotBlank() && !it.contains("/cache/") && File(it).exists() }
+        }
 
-        android.util.Log.d("PantryRepository", "Syncing remote update for ${finalItem.id}. Mode: ${finalItem.trackingType}, Shelf: ${finalItem.shelfNumber}")
+        android.util.Log.d("PantryRepository", "Syncing update for ${finalItem.name} (${finalItem.id}): API_IMG=${finalItem.apiImageUrl}, CUSTOM_IMG=${finalItem.imageUrl}")
         pantryDao.insertItem(finalItem.copy(localImageUri = sanitizedUri))
     }
 }

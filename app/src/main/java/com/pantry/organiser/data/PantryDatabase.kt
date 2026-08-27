@@ -8,12 +8,18 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PantryItem::class], version = 3, exportSchema = false)
+@Database(entities = [PantryItem::class], version = 4, exportSchema = false)
 @TypeConverters(PantryTypeConverters::class)
 abstract class PantryDatabase : RoomDatabase() {
     abstract fun pantryDao(): PantryDao
     companion object {
         @Volatile private var INSTANCE: PantryDatabase? = null
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE pantry_items ADD COLUMN api_image_url TEXT")
+            }
+        }
 
         fun getDatabase(context: Context): PantryDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -22,6 +28,7 @@ abstract class PantryDatabase : RoomDatabase() {
                     PantryDatabase::class.java,
                     "pantry_database.db"
                 )
+                .addMigrations(MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

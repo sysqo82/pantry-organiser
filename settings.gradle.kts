@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pantry-organiser"
+rootProject.name = "organiser-organiser"
 include(":app")

@@ -29,6 +29,9 @@ import com.pantry.organiser.ui.components.*
 import com.pantry.organiser.ui.ScannerMode
 import com.pantry.organiser.data.PantryItem
 
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
+
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.InternalCoroutinesApi::class)
 @Composable
 fun PantryScreen(viewModel: PantryViewModel) {
@@ -36,6 +39,13 @@ fun PantryScreen(viewModel: PantryViewModel) {
     val configuration = LocalConfiguration.current
     // Side-by-side layout only for wide screens in landscape
     val isTablet = configuration.screenWidthDp >= 600 && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Read-Only mode for mobile devices (phones)
+    val isReadOnly = configuration.screenWidthDp < 600
+
+    // Force ViewModel into Read-Only mode if on a phone
+    LaunchedEffect(isReadOnly) {
+        viewModel.setReadOnly(isReadOnly)
+    }
 
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -91,11 +101,19 @@ fun PantryScreen(viewModel: PantryViewModel) {
                     TopAppBar(
                         title = { Text("Pantry Organiser") },
                         windowInsets = WindowInsets.statusBars,
+                        actions = {
+                            if (isReadOnly) {
+                                IconButton(onClick = { viewModel.showScanner(ScannerMode.RESTOCK) }) {
+                                    Icon(Icons.Default.Search, contentDescription = "Lookup Item")
+                                }
+                            }
+                        }
                     )
                 }
             },
             floatingActionButton = {
-                if (!isTablet) {
+                // Hide FAB on tablets (since they have the Action Dock) and on mobile Read-Only mode
+                if (!isTablet && !isReadOnly) {
                     FloatingActionButton(
                         onClick = { viewModel.showScanner(ScannerMode.RESTOCK) },
                         modifier = Modifier.navigationBarsPadding()
@@ -115,6 +133,7 @@ fun PantryScreen(viewModel: PantryViewModel) {
             } else {
                 MobileLayout(
                     padding = innerPadding,
+                    isReadOnly = isReadOnly,
                     uiState = uiState,
                     viewModel = viewModel,
                     listState = listState
@@ -124,9 +143,11 @@ fun PantryScreen(viewModel: PantryViewModel) {
             uiState.editingItem?.let { item ->
                 EditItemBottomSheet(
                     item = item,
+                    isReadOnly = isReadOnly,
                     onDismiss = { viewModel.clearEditingItem() },
                     onSave = { viewModel.updateItem(it) },
-                    onDelete = { viewModel.deleteItem(it) }
+                    onDelete = { viewModel.deleteItem(it) },
+                    onRestoreApiImage = { viewModel.restoreApiImage(item) }
                 )
             }
 
@@ -194,6 +215,7 @@ fun PantryScreen(viewModel: PantryViewModel) {
 @Composable
 fun MobileLayout(
     padding: PaddingValues,
+    isReadOnly: Boolean,
     uiState: PantryUiState,
     viewModel: PantryViewModel,
     listState: LazyListState
@@ -217,6 +239,7 @@ fun MobileLayout(
         PantryItemList(
             filteredItems = uiState.filteredItems,
             highlightedItemId = uiState.highlightedItemId,
+            isReadOnly = isReadOnly,
             listState = listState,
             viewModel = viewModel,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
@@ -273,6 +296,7 @@ fun TabletLayout(
                 PantryItemList(
                     filteredItems = uiState.filteredItems,
                     highlightedItemId = uiState.highlightedItemId,
+                    isReadOnly = false, // Tablet is always Admin
                     listState = listState,
                     viewModel = viewModel,
                     contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
@@ -381,6 +405,7 @@ fun DockButton(
 fun PantryItemList(
     filteredItems: List<PantryItem>,
     highlightedItemId: String?,
+    isReadOnly: Boolean,
     listState: LazyListState,
     viewModel: PantryViewModel,
     modifier: Modifier = Modifier,
@@ -401,6 +426,7 @@ fun PantryItemList(
                 PantryItemCard(
                     item = item,
                     isHighlighted = highlightedItemId == item.id,
+                    isReadOnly = isReadOnly,
                     onConsume = { viewModel.consumePortion(item) },
                     onAddSealed = { viewModel.addSealedUnit(item) },
                     onRemoveSealed = { viewModel.removeSealedUnit(item) },

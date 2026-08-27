@@ -11,7 +11,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.pantry.organiser"
+        applicationId = "com.organiser.organiser"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

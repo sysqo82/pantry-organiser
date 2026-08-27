@@ -45,7 +45,7 @@ class OpenFoodFactsRepository {
             })
         }
         install(DefaultRequest) {
-            header(HttpHeaders.UserAgent, "VisualPantry/1.1 (Android; support@visualpantry.example.com)")
+            header(HttpHeaders.UserAgent, "VisualPantry/1.1 (Android; support@visualpantry.organiser.com)")
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 10000

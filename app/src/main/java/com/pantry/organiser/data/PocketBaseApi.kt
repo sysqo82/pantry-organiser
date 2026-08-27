@@ -14,6 +14,7 @@ import io.ktor.utils.io.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
@@ -142,8 +143,19 @@ class PocketBaseApi {
         return "$baseUrl/api/files/$collectionName/$recordId/$fileName"
     }
 
+    private var realtimeJob: Job? = null
+
+    fun stopRealtimeSync() {
+        android.util.Log.d("PocketBase", "Stopping realtime sync...")
+        realtimeJob?.cancel()
+        realtimeJob = null
+        clientId = null
+    }
+
     fun startRealtimeSync(scope: CoroutineScope) {
-        scope.launch {
+        if (realtimeJob != null) return
+        
+        realtimeJob = scope.launch {
             while (isActive) {
                 try {
                     realtimeClient.prepareGet("$baseUrl/api/realtime") {
@@ -153,25 +165,43 @@ class PocketBaseApi {
                         }
                     }.execute { response ->
                         val reader = response.bodyAsChannel()
-                        while (!reader.isClosedForRead) {
-                            val line = reader.readUTF8Line() ?: break
+                        while (!reader.isClosedForRead && isActive) {
+                            val line = try {
+                                reader.readUTF8Line()
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                android.util.Log.w("PocketBase", "Stream read error: ${e.message}")
+                                null
+                            } ?: break
+
                             if (line.startsWith("data:")) {
                                 val data = line.removePrefix("data:").trim()
                                 if (data.isEmpty()) continue
                                 
-                                val element = json.parseToJsonElement(data).jsonObject
-                                if (element.containsKey("clientId")) {
-                                    clientId = element["clientId"]?.jsonPrimitive?.content
-                                    scope.launch { subscribeToCollection("pantry_items") }
-                                } else if (element.containsKey("action")) {
-                                    val event = json.decodeFromJsonElement<RealtimeEvent>(element)
-                                    scope.launch { _realtimeEvents.emit(event) }
+                                try {
+                                    val element = json.parseToJsonElement(data).jsonObject
+                                    if (element.containsKey("clientId")) {
+                                        clientId = element["clientId"]?.jsonPrimitive?.content
+                                        android.util.Log.d("PocketBase", "Realtime connected. ClientId: $clientId")
+                                        scope.launch { subscribeToCollection("pantry_items") }
+                                    } else if (element.containsKey("action")) {
+                                        val event = json.decodeFromJsonElement<RealtimeEvent>(element)
+                                        scope.launch { _realtimeEvents.emit(event) }
+                                    }
+                                } catch (e: Exception) {
+                                    android.util.Log.e("PocketBase", "Failed to parse realtime data: $data", e)
                                 }
                             }
                         }
                     }
                 } catch (e: Exception) {
-                    android.util.Log.e("PocketBase", "Realtime sync error, retrying...", e)
+                    if (e is CancellationException) throw e
+                    
+                    if (e is java.io.IOException) {
+                        android.util.Log.w("PocketBase", "Realtime connection lost (${e.message}), retrying in 5s...")
+                    } else {
+                        android.util.Log.e("PocketBase", "Realtime sync error", e)
+                    }
                     delay(5000)
                 }
             }

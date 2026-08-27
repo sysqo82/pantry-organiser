@@ -14,9 +14,10 @@ import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.pantry.organiser.data.PantryDatabase
 import com.pantry.organiser.data.PantryRepository
 import com.pantry.organiser.ui.PantryScreen
 import com.pantry.organiser.ui.PantryViewModel
@@ -47,9 +48,18 @@ class MainActivity : ComponentActivity() {
 
         checkCameraPermission()
 
-        val database = PantryDatabase.getDatabase(this)
-        val repository = PantryRepository(database.pantryDao(), filesDir = filesDir)
+        val repository = (application as PantryApplication).repository
         
+        // Lifecycle Observer to stop/start sync when app goes to background/foreground
+        lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                repository.startRealtimeSync()
+            }
+            override fun onStop(owner: LifecycleOwner) {
+                repository.stopRealtimeSync()
+            }
+        })
+
         val viewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")

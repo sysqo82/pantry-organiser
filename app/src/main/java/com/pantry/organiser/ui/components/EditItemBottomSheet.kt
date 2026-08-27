@@ -7,6 +7,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pantry.organiser.data.FillLevel
 import com.pantry.organiser.data.PantryItem
@@ -24,9 +26,11 @@ import com.pantry.organiser.data.TrackingType
 @Composable
 fun EditItemBottomSheet(
     item: PantryItem,
+    isReadOnly: Boolean = false, // New parameter for Role Enforcement
     onDismiss: () -> Unit,
     onSave: (PantryItem) -> Unit,
-    onDelete: (PantryItem) -> Unit
+    onDelete: (PantryItem) -> Unit,
+    onRestoreApiImage: () -> Unit = {} // New feature callback
 ) {
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp >= 600
@@ -70,18 +74,58 @@ fun EditItemBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Preview with API Priority
+                // We detect if the "custom" imageUrl is actually an OFF link and treat it as apiImageUrl
+                val effectiveApiUrl = item.apiImageUrl ?: item.imageUrl?.takeIf { it.contains("openfoodfacts.org") }
+                val effectiveCustomUrl = if (item.imageUrl?.contains("openfoodfacts.org") == true) null else item.imageUrl
+
+                ProductThumbnail(
+                    imageUrl = effectiveCustomUrl,
+                    apiImageUrl = effectiveApiUrl,
+                    localImageUri = item.localImageUri,
+                    itemName = name,
+                    updatedAt = item.updatedAt,
+                    thumbnailSize = 120.dp
+                )
+                
+                // Show Restore if we have a custom local photo OR a custom remote photo, AND an API image exists
+                val hasCustomPhoto = item.localImageUri != null || (item.imageUrl != null && item.imageUrl.contains("openfoodfacts.org") == false)
+                val hasOriginalImage = effectiveApiUrl != null
+                
+                if (!isReadOnly && hasCustomPhoto && hasOriginalImage) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = onRestoreApiImage,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Default.Fastfood, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Restore Original API Image")
+                    }
+                    Text(
+                        "This will delete your custom photo.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
-                    text = "Edit Item",
+                    text = if (isReadOnly) "Item Details" else "Edit Item",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold
                 )
-                
-                Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
+                    enabled = !isReadOnly,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -89,6 +133,7 @@ fun EditItemBottomSheet(
                     value = brand,
                     onValueChange = { brand = it },
                     label = { Text("Brand") },
+                    enabled = !isReadOnly,
                     modifier = Modifier.fillMaxWidth()
                 )
                 
@@ -96,6 +141,7 @@ fun EditItemBottomSheet(
                     value = packageQuantity,
                     onValueChange = { packageQuantity = it },
                     label = { Text("Weight / Quantity per pack") },
+                    enabled = !isReadOnly,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -108,14 +154,16 @@ fun EditItemBottomSheet(
                 ) {
                     FilterChip(
                         selected = trackingType == TrackingType.DISCRETE_COUNT,
-                        onClick = { trackingType = TrackingType.DISCRETE_COUNT },
+                        onClick = { if (!isReadOnly) trackingType = TrackingType.DISCRETE_COUNT },
                         label = { Text("Discrete Count") },
+                        enabled = !isReadOnly,
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = trackingType == TrackingType.BULK_LEVEL,
-                        onClick = { trackingType = TrackingType.BULK_LEVEL },
+                        onClick = { if (!isReadOnly) trackingType = TrackingType.BULK_LEVEL },
                         label = { Text("Bulk / Staple") },
+                        enabled = !isReadOnly,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -130,6 +178,7 @@ fun EditItemBottomSheet(
                         value = sealedCount,
                         onValueChange = { if (it.all { char -> char.isDigit() }) sealedCount = it },
                         label = { Text("Sealed Count") },
+                        enabled = !isReadOnly,
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                     )
@@ -145,8 +194,9 @@ fun EditItemBottomSheet(
                     FillLevel.entries.forEach { level ->
                         FilterChip(
                             selected = activeFill == level,
-                            onClick = { activeFill = level },
-                            label = { Text(level.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }) }
+                            onClick = { if (!isReadOnly) activeFill = level },
+                            label = { Text(level.name.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() }) },
+                            enabled = !isReadOnly
                         )
                     }
                 }
@@ -164,7 +214,7 @@ fun EditItemBottomSheet(
                 ) {
                     PantryShelfGrid(
                         selectedCell = selectedRow to selectedCol,
-                        onCellClick = { r, c -> selectedRow = r; selectedCol = c },
+                        onCellClick = { r, c -> if (!isReadOnly) { selectedRow = r; selectedCol = c } },
                         highlightedItem = item.copy(
                             shelfNumber = (4 - selectedRow).coerceIn(1, 4),
                             zoneIndex = (selectedCol + 1).coerceIn(1, 3)
@@ -173,40 +223,51 @@ fun EditItemBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                if (!isReadOnly) {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Button(
-                    onClick = {
-                        val mappedShelf = (4 - selectedRow).coerceIn(1, 4)
-                        val mappedZone = (selectedCol + 1).coerceIn(1, 3)
-                        
-                        onSave(item.copy(
-                            name = name,
-                            brand = brand,
-                            packageQuantity = packageQuantity,
-                            trackingType = trackingType,
-                            sealedCount = sealedCount.toIntOrNull() ?: 0,
-                            activeFill = activeFill,
-                            shelfNumber = mappedShelf,
-                            zoneIndex = mappedZone
-                        ))
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Save Changes")
-                }
+                    Button(
+                        onClick = {
+                            val mappedShelf = (4 - selectedRow).coerceIn(1, 4)
+                            val mappedZone = (selectedCol + 1).coerceIn(1, 3)
+                            
+                            onSave(item.copy(
+                                name = name,
+                                brand = brand,
+                                packageQuantity = packageQuantity,
+                                trackingType = trackingType,
+                                sealedCount = sealedCount.toIntOrNull() ?: 0,
+                                activeFill = activeFill,
+                                shelfNumber = mappedShelf,
+                                zoneIndex = mappedZone
+                            ))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Save, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Save Changes")
+                    }
 
-                TextButton(
-                    onClick = { showDeleteConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Delete Item")
+                    TextButton(
+                        onClick = { showDeleteConfirm = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Delete Item")
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Editing is disabled on mobile. Use your tablet to manage inventory.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -218,7 +279,7 @@ fun EditItemBottomSheet(
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
             title = { Text("Delete Item?") },
-            text = { Text("Are you sure you want to remove '$name' from your pantry?") },
+            text = { Text("Are you sure you want to remove '$name' from your organiser?") },
             confirmButton = {
                 Button(
                     onClick = { onDelete(item) },
