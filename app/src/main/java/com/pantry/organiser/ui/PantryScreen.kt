@@ -39,25 +39,24 @@ import androidx.compose.material.icons.filled.MoreVert
 @Composable
 fun PantryScreen(viewModel: PantryViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     
     // 1. Determine Device Role from Configuration Resource
     val deviceRole = stringResource(R.string.device_role)
     val isPrimaryDevice = deviceRole == "PRIMARY"
     
-    // 2. Lock Layout Choice to Role
-    // Primary Device uses TabletLayout, Secondary uses MobileLayout
-    val isTablet = isPrimaryDevice 
-    val isReadOnly = !isPrimaryDevice
+    // 2. Adaptive Layout Detection
+    // We use smallestScreenWidthDp to differentiate between a tablet and a phone in landscape.
+    // Phones in landscape typically have width >= 600 but smallest width < 600.
+    val isTablet = configuration.smallestScreenWidthDp >= 600
+    
+    // Tablet is always Admin/Write. Mobile respects the device_role.
+    val isReadOnly = if (isTablet) false else !isPrimaryDevice
 
-    // 3. Force Orientation Lock for Primary Device (Tablet)
-    DisposableEffect(isPrimaryDevice) {
-        if (isPrimaryDevice) {
-            val activity = context as? Activity
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        }
-        onDispose {}
-    }
+    // 3. Optional Orientation Handling
+    // We ensure TabletLayout handles landscape correctly by being the active layout.
+    // No explicit orientation lock needed if we want to allow flexibility,
+    // but the layout will adapt based on the width.
 
     // Force ViewModel into Read-Only mode based on role
 
