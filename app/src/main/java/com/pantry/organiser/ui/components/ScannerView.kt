@@ -12,11 +12,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
+
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -78,13 +84,17 @@ fun ScannerView(
     onUpdateConsumeLevel: (FillLevel) -> Unit,
     onUpdateConsumeUnits: (Int) -> Unit,
     onCancelConsume: () -> Unit,
+    isReadOnly: Boolean,
+    isTablet: Boolean, // Pass role-based identity from screen
 
     onSave: (String, String, String, Int, Int, String?, String?, TrackingType) -> Unit,
+
+
     onDismiss: () -> Unit
 ) {
-    val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
     val haptic = LocalHapticFeedback.current
+
+
     val context = LocalContext.current
 
     var isScreenLightEnabled by remember { mutableStateOf(false) }
@@ -417,12 +427,26 @@ fun ScannerView(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
+                                .statusBarsPadding()
                                 .padding(24.dp)
                                 .navigationBarsPadding(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text("Add Product Details", style = MaterialTheme.typography.headlineSmall)
+
+                            Surface(
+                                color = if (isReadOnly) MaterialTheme.colorScheme.errorContainer else Color.Transparent,
+                                shape = RoundedCornerShape(16.dp)
+                            ) {
+                                Text(
+                                    text = if (isReadOnly) "Item Not in Pantry" else "Add Product Details", 
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isReadOnly) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+
                             
                             var name by remember { mutableStateOf(product.displayProductName ?: "") }
                             var brand by remember { mutableStateOf(product.brands ?: "") }
@@ -431,36 +455,107 @@ fun ScannerView(
                             var selectedRow by remember { mutableIntStateOf(0) }
                             var selectedCol by remember { mutableIntStateOf(1) }
 
-                            OutlinedTextField(value = name, onValueChange = { name = it; timerKey++ }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = brand, onValueChange = { brand = it; timerKey++ }, label = { Text("Brand") }, modifier = Modifier.fillMaxWidth())
-                            OutlinedTextField(value = packageQuantity, onValueChange = { packageQuantity = it; timerKey++ }, label = { Text("Weight / Quantity") }, modifier = Modifier.fillMaxWidth())
-                            
-                            Text("Tracking Mode", style = MaterialTheme.typography.titleMedium)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(selected = trackingType == TrackingType.DISCRETE_COUNT, onClick = { trackingType = TrackingType.DISCRETE_COUNT; timerKey++ }, label = { Text("Discrete") })
-                                FilterChip(selected = trackingType == TrackingType.BULK_LEVEL, onClick = { trackingType = TrackingType.BULK_LEVEL; timerKey++ }, label = { Text("Bulk/Staple") })
+                            if (!isReadOnly) {
+                                OutlinedTextField(value = name, onValueChange = { name = it; timerKey++ }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = brand, onValueChange = { brand = it; timerKey++ }, label = { Text("Brand") }, modifier = Modifier.fillMaxWidth())
+                                OutlinedTextField(value = packageQuantity, onValueChange = { packageQuantity = it; timerKey++ }, label = { Text("Weight / Quantity") }, modifier = Modifier.fillMaxWidth())
+                                
+                                Text("Tracking Mode", style = MaterialTheme.typography.titleMedium)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(selected = trackingType == TrackingType.DISCRETE_COUNT, onClick = { trackingType = TrackingType.DISCRETE_COUNT; timerKey++ }, label = { Text("Discrete") })
+                                    FilterChip(selected = trackingType == TrackingType.BULK_LEVEL, onClick = { trackingType = TrackingType.BULK_LEVEL; timerKey++ }, label = { Text("Bulk/Staple") })
+                                }
+
+                                Text("Placement", style = MaterialTheme.typography.titleMedium)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(260.dp)
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    PantryShelfGrid(
+                                        selectedCell = selectedRow to selectedCol,
+                                        onCellClick = { r, c -> selectedRow = r; selectedCol = c; timerKey++ },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { onSave(name, brand, packageQuantity, selectedRow, selectedCol, product.imageUrl, null, trackingType) },
+                                    modifier = Modifier.fillMaxWidth().height(56.dp)
+                                ) {
+                                    Text("Save to Pantry")
+                                }
+                            } else {
+                                // Read-Only Detailed View - Improved UI
+                                Spacer(Modifier.height(24.dp))
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(200.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (product.imageUrl != null) {
+                                        ProductThumbnail(
+                                            imageUrl = product.imageUrl,
+                                            itemName = product.displayProductName ?: "",
+                                            thumbnailSize = 200.dp,
+                                            modifier = Modifier.clip(RoundedCornerShape(24.dp))
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Filled.Inventory,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(80.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                        )
+
+                                    }
+                                }
+                                
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = name, 
+                                        style = MaterialTheme.typography.headlineSmall, 
+                                        fontWeight = FontWeight.ExtraBold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Text(
+                                        text = brand, 
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (packageQuantity.isNotEmpty()) {
+                                        Text(
+                                            text = packageQuantity, 
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(Modifier.weight(1f)) // Push button to bottom
+                                
+                                Button(
+                                    onClick = { onCancelPending() },
+                                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text("Return to Pantry", style = MaterialTheme.typography.titleMedium)
+                                }
+
+                                
+                                Spacer(Modifier.height(16.dp))
                             }
 
-                            Text("Placement", style = MaterialTheme.typography.titleMedium)
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(260.dp)
-                                    .padding(vertical = 8.dp)
-                            ) {
-                                PantryShelfGrid(
-                                    selectedCell = selectedRow to selectedCol,
-                                    onCellClick = { r, c -> selectedRow = r; selectedCol = c; timerKey++ },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
 
-                            Button(
-                                onClick = { onSave(name, brand, packageQuantity, selectedRow, selectedCol, product.imageUrl, null, trackingType) },
-                                modifier = Modifier.fillMaxWidth().height(56.dp)
-                            ) {
-                                Text("Save to Pantry")
-                            }
                         }
                     }
                 }
@@ -610,7 +705,7 @@ fun ScannerView(
                         Text(error, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                     }
 
-                    if (scannerMode == ScannerMode.RESTOCK && !isLoading) {
+                    if (scannerMode == ScannerMode.RESTOCK && !isLoading && !isReadOnly) {
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = onManualEntry,
@@ -621,40 +716,47 @@ fun ScannerView(
                             Text("Manual Entry")
                         }
                     }
+
                 }
             }
         }
         
-        // Close button (Always present, top layer)
-        IconButton(
-            onClick = onDismiss,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(16.dp)
-                .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-        ) {
-            Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+        // Close button (Always present, top layer) - Hidden when specific overlays are active
+        if (pendingNewItem == null && scannedProduct == null && pendingConsumeItem == null) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.3f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+            }
         }
 
-        // Screen Light Toggle (Top Left)
-        IconButton(
-            onClick = { isScreenLightEnabled = !isScreenLightEnabled },
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(16.dp)
-                .background(
-                    if (isScreenLightEnabled) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.3f), 
-                    CircleShape
+
+        // Screen Light Toggle (Top Left) - Hidden on Read-Only devices
+        if (!isReadOnly) {
+            IconButton(
+                onClick = { isScreenLightEnabled = !isScreenLightEnabled },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(16.dp)
+                    .background(
+                        if (isScreenLightEnabled) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.3f), 
+                        CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = if (isScreenLightEnabled) Icons.Filled.Lightbulb else Icons.Outlined.Lightbulb,
+                    contentDescription = "Screen Light",
+                    tint = if (isScreenLightEnabled) Color.White else Color.White
                 )
-        ) {
-            Icon(
-                imageVector = if (isScreenLightEnabled) Icons.Filled.Lightbulb else Icons.Outlined.Lightbulb,
-                contentDescription = "Screen Light",
-                tint = if (isScreenLightEnabled) Color.White else Color.White
-            )
+            }
         }
+
     }
 }
 

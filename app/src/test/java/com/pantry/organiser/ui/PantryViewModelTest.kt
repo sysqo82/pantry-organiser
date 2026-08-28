@@ -8,9 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
+import org.junit.Assert.*
 
 import org.junit.Before
 import org.junit.Test
@@ -264,6 +262,31 @@ class PantryViewModelTest {
         coVerify(timeout = 2000) { repository.deleteItem(match { it.id == "item1" }) }
     }
 
+    @Test
+    fun `scanBarcode resets isProcessingScan on API failure`() = runTest {
+        // 1. Setup failure
+        coEvery { repository.getItemByBarcode("999") } returns null
+        coEvery { offRepository.getProduct("999") } throws RuntimeException("Network error")
+        
+        // 2. First scan (will fail)
+        viewModel.scanBarcode("999")
+        
+        // 3. Verify error is shown
+        viewModel.uiState.test {
+            val state = awaitItem()
+            assertEquals("Scan failed", state.error)
+            cancelAndIgnoreRemainingEvents()
+        }
+        
+        // 4. Second scan (should start processing, not be ignored)
+        // If isProcessingScan was stuck at true, the log would say "Scan ignored" and no new launch would occur.
+        // We can verify by checking if getItemByBarcode is called again.
+        viewModel.scanBarcode("999")
+        coVerify(exactly = 2) { repository.getItemByBarcode("999") }
+    }
+
+
+
 
     @Test
     fun `determineTrackingType categorizes flour as Bulk`() {
@@ -364,6 +387,82 @@ class PantryViewModelTest {
         assertEquals(4, PantryItem.inferUnitsPerPack("Yoghurt", "Pack of 4"))
         assertEquals(12, PantryItem.inferUnitsPerPack("Eggs", "pack of 12"))
     }
+
+    @Test
+    fun `cancelPendingItem dismisses the scanner and returns to pantry`() = runTest {
+        // 1. Setup a "Pending" state
+        viewModel.showScanner(ScannerMode.RESTOCK)
+        val product = OffProduct(productName = "Unknown Soda")
+        coEvery { repository.getItemByBarcode("999") } returns null
+        coEvery { offRepository.getProduct("999") } returns product
+        viewModel.scanBarcode("999")
+        
+        // 2. Action: Cancel/Return to Pantry
+        viewModel.cancelPendingItem()
+
+        // 3. Assertion: Scanner should be CLOSED
+        assertFalse(viewModel.uiState.value.isScannerVisible)
+        assertNull(viewModel.uiState.value.scannedProduct)
+    }
+
+
+
+    @Test
+    fun `scanBarcode for new item correctly transitions through loading to pendingNewItem`() = runTest {
+        val product = OffProduct(productName = "New Soda", brands = "BrandX", weight = "500ml")
+        coEvery { repository.getItemByBarcode("777") } returns null
+        coEvery { offRepository.getProduct("777") } returns product
+        
+        viewModel.uiState.test {
+            assertEquals(emptyList<PantryItem>(), awaitItem().items) // Initial
+            
+            viewModel.scanBarcode("777")
+            
+            // 1. May see loading state (depends on dispatcher timing)
+            var state = awaitItem()
+            if (state.isLoading) {
+                state = awaitItem() // Wait for final state
+            }
+            
+            // 2. Final state should have the item
+            assertEquals("New Soda", state.pendingNewItem?.name)
+            assertFalse(state.isLoading)
+            
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+
+
+    @Test
+    fun `scanBarcode on Read-Only device for unknown item shows details and error`() = runTest {
+        viewModel.setReadOnly(true)
+        val product = OffProduct(productName = "External Item", brands = "BrandX")
+        coEvery { repository.getItemByBarcode("999") } returns null
+        coEvery { offRepository.getProduct("999") } returns product
+        
+        viewModel.showScanner(ScannerMode.RESTOCK)
+        
+        viewModel.uiState.test {
+            awaitItem() // Scanner show state
+            
+            viewModel.scanBarcode("999")
+            
+            var state = awaitItem()
+            if (state.isLoading) {
+                state = awaitItem()
+            }
+            
+            assertEquals("Item not found in pantry", state.error)
+            assertEquals("External Item", state.scannedProduct?.productName)
+            
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
 }
+
+
+
 
 

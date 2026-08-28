@@ -22,7 +22,10 @@ import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import androidx.compose.ui.res.stringResource
+import com.pantry.organiser.R
 import kotlinx.coroutines.delay
 import com.pantry.organiser.data.TrackingType
 import com.pantry.organiser.ui.components.*
@@ -36,13 +39,28 @@ import androidx.compose.material.icons.filled.MoreVert
 @Composable
 fun PantryScreen(viewModel: PantryViewModel) {
     val uiState by viewModel.uiState.collectAsState()
-    val configuration = LocalConfiguration.current
-    // Side-by-side layout only for wide screens in landscape
-    val isTablet = configuration.screenWidthDp >= 600 && configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    // Read-Only mode for mobile devices (phones)
-    val isReadOnly = configuration.screenWidthDp < 600
+    val context = LocalContext.current
+    
+    // 1. Determine Device Role from Configuration Resource
+    val deviceRole = stringResource(R.string.device_role)
+    val isPrimaryDevice = deviceRole == "PRIMARY"
+    
+    // 2. Lock Layout Choice to Role
+    // Primary Device uses TabletLayout, Secondary uses MobileLayout
+    val isTablet = isPrimaryDevice 
+    val isReadOnly = !isPrimaryDevice
 
-    // Force ViewModel into Read-Only mode if on a phone
+    // 3. Force Orientation Lock for Primary Device (Tablet)
+    DisposableEffect(isPrimaryDevice) {
+        if (isPrimaryDevice) {
+            val activity = context as? Activity
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        }
+        onDispose {}
+    }
+
+    // Force ViewModel into Read-Only mode based on role
+
     LaunchedEffect(isReadOnly) {
         viewModel.setReadOnly(isReadOnly)
     }
@@ -102,26 +120,16 @@ fun PantryScreen(viewModel: PantryViewModel) {
                         title = { Text("Pantry Organiser") },
                         windowInsets = WindowInsets.statusBars,
                         actions = {
-                            if (isReadOnly) {
-                                IconButton(onClick = { viewModel.showScanner(ScannerMode.RESTOCK) }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Lookup Item")
-                                }
+                            IconButton(onClick = { viewModel.showScanner(ScannerMode.RESTOCK) }) {
+                                Icon(Icons.Default.Search, contentDescription = "Lookup Item")
                             }
                         }
                     )
                 }
+
             },
-            floatingActionButton = {
-                // Hide FAB on tablets (since they have the Action Dock) and on mobile Read-Only mode
-                if (!isTablet && !isReadOnly) {
-                    FloatingActionButton(
-                        onClick = { viewModel.showScanner(ScannerMode.RESTOCK) },
-                        modifier = Modifier.navigationBarsPadding()
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Item")
-                    }
-                }
-            }
+            floatingActionButton = {}
+
         ) { innerPadding ->
             if (isTablet) {
                 TabletLayout(
@@ -202,7 +210,11 @@ fun PantryScreen(viewModel: PantryViewModel) {
                 onUpdateConsumeLevel = { viewModel.updatePendingConsumeLevel(it) },
                 onUpdateConsumeUnits = { viewModel.updatePendingConsumeUnits(it) },
                 onCancelConsume = { viewModel.cancelPendingConsume() },
+                isReadOnly = isReadOnly,
+                isTablet = isTablet,
                 onSave = { name, brand, qty, r, c, img, bc, type ->
+
+
                     viewModel.saveScannedItem(name, brand, qty, r, c, img, bc, type)
                 },
                 onDismiss = { 
@@ -223,33 +235,68 @@ fun MobileLayout(
     viewModel: PantryViewModel,
     listState: LazyListState
 ) {
-    Column(
-        modifier = Modifier
-            .padding(padding)
-            .fillMaxSize()
-    ) {
-        PantryShelfGrid(
-            selectedCell = uiState.selectedShelf,
-            onCellClick = { r, c -> viewModel.selectShelf(r, c) },
-            highlightedItem = uiState.items.find { it.id == uiState.highlightedItemId },
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.4f)
-        )
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            PantryShelfGrid(
+                selectedCell = uiState.selectedShelf,
+                onCellClick = { r, c -> viewModel.selectShelf(r, c) },
+                highlightedItem = uiState.items.find { it.id == uiState.highlightedItemId },
+                modifier = Modifier
+                    .weight(0.4f)
+                    .fillMaxHeight()
+            )
 
-        HorizontalDivider()
+            VerticalDivider(modifier = Modifier.fillMaxHeight().width(1.dp), color = MaterialTheme.colorScheme.outlineVariant)
 
-        PantryItemList(
-            filteredItems = uiState.filteredItems,
-            highlightedItemId = uiState.highlightedItemId,
-            isReadOnly = isReadOnly,
-            listState = listState,
-            viewModel = viewModel,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-            modifier = Modifier.weight(1f)
-        )
+            PantryItemList(
+                filteredItems = uiState.filteredItems,
+                highlightedItemId = uiState.highlightedItemId,
+                isReadOnly = isReadOnly,
+                listState = listState,
+                viewModel = viewModel,
+                contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp),
+                modifier = Modifier.weight(0.6f).fillMaxHeight()
+            )
+        }
+    } else {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+        ) {
+            PantryShelfGrid(
+                selectedCell = uiState.selectedShelf,
+                onCellClick = { r, c -> viewModel.selectShelf(r, c) },
+                highlightedItem = uiState.items.find { it.id == uiState.highlightedItemId },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.4f)
+            )
+
+            HorizontalDivider()
+
+            PantryItemList(
+                filteredItems = uiState.filteredItems,
+                highlightedItemId = uiState.highlightedItemId,
+                isReadOnly = isReadOnly,
+                listState = listState,
+                viewModel = viewModel,
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
+                modifier = Modifier.weight(0.6f)
+            )
+        }
     }
 }
+
 
 @Composable
 fun TabletLayout(

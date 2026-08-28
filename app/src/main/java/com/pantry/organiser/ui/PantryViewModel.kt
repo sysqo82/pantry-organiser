@@ -67,8 +67,10 @@ class PantryViewModel(
     }
 
     fun setReadOnly(readOnly: Boolean) {
+        android.util.Log.d("PantryVM", "[DEBUG-SCAN] Device role set: isReadOnly=$readOnly")
         _uiState.update { it.copy(isReadOnly = readOnly) }
     }
+
 
     fun selectItem(item: PantryItem) {
         _uiState.update { 
@@ -318,7 +320,9 @@ class PantryViewModel(
                 error = null
             ) 
         }
+        isProcessingScan = false // UNLOCK
     }
+
 
     fun scanBarcode(barcode: String) {
         val trimmedBarcode = barcode.trim()
@@ -332,14 +336,19 @@ class PantryViewModel(
         }
         
         isProcessingScan = true
-        android.util.Log.d("PantryVM", "Processing barcode: '$trimmedBarcode'")
+        android.util.Log.d("PantryVM", "[DEBUG-SCAN] Processing barcode: '$trimmedBarcode'")
         
         viewModelScope.launch {
             try {
                 // 1. Local Lookup with variants
                 val codes = mutableSetOf(trimmedBarcode)
+                // Normalize 12/13/14 digit barcodes (UPC/EAN/GTIN)
                 if (trimmedBarcode.length == 12) codes.add("0$trimmedBarcode")
-                else if (trimmedBarcode.length == 13 && trimmedBarcode.startsWith("0")) codes.add(trimmedBarcode.substring(1))
+                if (trimmedBarcode.length == 13 && trimmedBarcode.startsWith("0")) codes.add(trimmedBarcode.substring(1))
+                if (trimmedBarcode.length == 13) codes.add("0$trimmedBarcode")
+                if (trimmedBarcode.length == 14 && trimmedBarcode.startsWith("0")) codes.add(trimmedBarcode.substring(1))
+                
+                android.util.Log.d("PantryVM", "[DEBUG-SCAN] Checking local DB for codes: $codes")
 
                 var existingItem: PantryItem? = null
                 for (code in codes) {
@@ -347,97 +356,111 @@ class PantryViewModel(
                     if (existingItem != null) break
                 }
 
+
+
                 if (existingItem != null) {
-                    android.util.Log.d("PantryVM", "Local match found for: ${existingItem.name}")
-                    
-                    // Re-discover missing data or upgrade to multipack
-                    if (existingItem.apiImageUrl == null || existingItem.unitsPerPack <= 1) {
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Local match found: ${existingItem.name}")
+                        if (existingItem.apiImageUrl == null || existingItem.unitsPerPack <= 1) {
+                        // Do background discovery/auto-fix without blocking the scan result
                         viewModelScope.launch {
                             val product = offRepository.getProduct(trimmedBarcode)
                             if (product != null) {
                                 var updated = existingItem
-                                if (existingItem.apiImageUrl == null && product.imageUrl != null) {
-                                    updated = updated.copy(apiImageUrl = product.imageUrl)
-                                }
+                                if (existingItem.apiImageUrl == null && product.imageUrl != null) updated = updated.copy(apiImageUrl = product.imageUrl)
                                 if (existingItem.unitsPerPack <= 1) {
                                     val inferred = product.inferUnitsPerPack()
                                     if (inferred > 1) {
                                         updated = updated.copy(
                                             unitsPerPack = inferred,
-                                            activeCount = if (updated.activeCount <= 1) inferred else updated.activeCount
+                                            sealedCount = if (updated.sealedCount <= 1) inferred else updated.sealedCount
                                         )
-                                        android.util.Log.d("PantryVM", "Discovered multipack for existing item: ${existingItem.name} ($inferred-pack)")
                                     }
                                 }
-                                if (updated != existingItem) {
-                                    repository.updateItem(updated)
-                                }
+                                if (updated != existingItem) repository.updateItem(updated)
                             }
                         }
                     }
-                    
-                    handleExistingItemScan(existingItem)
 
-                    isProcessingScan = false
+                    handleExistingItemScan(existingItem)
+                    // handleExistingItemScan resets isProcessingScan internally
                     return@launch
+
                 }
 
                 // 2. Consume Mode Fail-Fast
                 if (_uiState.value.scannerMode == ScannerMode.CONSUME) {
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Item not found in Consume mode")
                     _uiState.update { it.copy(error = "Item not in organiser") }
-                    isProcessingScan = false // UNLOCK IMMEDIATELY
+                    isProcessingScan = false 
                     kotlinx.coroutines.delay(2000)
                     _uiState.update { it.copy(error = null) }
                     return@launch
                 }
 
                 // 3. API Fetch
+                android.util.Log.d("PantryVM", "[DEBUG-SCAN] Starting API fetch for $trimmedBarcode")
                 _uiState.update { it.copy(isLoading = true, error = null) }
                 val product = offRepository.getProduct(trimmedBarcode)
-                isProcessingScan = false // UNLOCK IMMEDIATELY AFTER API RESPONSE
                 
                 if (product != null) {
-                    var trackingType = determineTrackingType(product)
-                    val unitsPerPack = product.inferUnitsPerPack()
-                    
-                    // Force discrete for multipacks
-                    if (unitsPerPack > 1) {
-                        trackingType = TrackingType.DISCRETE_COUNT
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Product found: ${product.displayProductName}")
+                    if (_uiState.value.isReadOnly) {
+                        _uiState.update { it.copy(isLoading = false, scannedProduct = product, error = "Item not found in pantry") }
+                        // remains true to show the details overlay until user dismisses
+                        return@launch
                     }
+                    
+                    var trackingType = determineTrackingType(product)
+
+
+                    val unitsPerPack = product.inferUnitsPerPack()
+                    if (unitsPerPack > 1) trackingType = TrackingType.DISCRETE_COUNT
 
                     val tempItem = PantryItem(
-                        id = "", // Empty ID for new local items
+                        id = "", 
                         name = product.displayProductName ?: "Unknown Item",
                         brand = product.brands ?: "",
                         packageQuantity = product.weight ?: "",
                         shelfNumber = 1,
                         zoneIndex = 1,
-                        imageUrl = null, // No custom image yet
-                        apiImageUrl = product.imageUrl, // Capture official API image
+                        apiImageUrl = product.imageUrl,
                         barcode = trimmedBarcode,
                         trackingType = trackingType,
                         unitsPerPack = unitsPerPack,
-                        activeCount = 1, // Not used for logic anymore
-                        activeFill = FillLevel.FULL,
                         sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 0
                     )
                     _uiState.update { it.copy(isLoading = false, pendingNewItem = tempItem) }
+                    // Flag stays true to block other scans while choosing shelf
                 } else {
-
-
-                    _uiState.update { it.copy(isLoading = false, error = "Product not found") }
-                    kotlinx.coroutines.delay(2000)
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Product not found on OFF")
+                    _uiState.update { it.copy(isLoading = false, error = "Item Not Found (Unknown Product)") }
+                    isProcessingScan = false
+                    kotlinx.coroutines.delay(4000)
                     _uiState.update { it.copy(error = null) }
                 }
+
+
+
             } catch (e: Exception) {
-                android.util.Log.e("PantryVM", "Error during scan", e)
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                android.util.Log.e("PantryVM", "[DEBUG-SCAN] Error during scan", e)
                 _uiState.update { it.copy(isLoading = false, error = "Scan failed") }
-                isProcessingScan = false
-                kotlinx.coroutines.delay(2000)
-                _uiState.update { it.copy(error = null) }
+            } finally {
+                // IMPORTANT: Only reset if we ARE NOT showing a pending UI overlay
+                // The pending UI methods (assignShelf, updateLevel, etc) will reset it when they finish.
+                val state = _uiState.value
+                if (state.pendingNewItem == null && state.pendingConsumeItem == null && state.scannedProduct == null) {
+                    isProcessingScan = false
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Scanner unlocked in finally")
+                } else {
+                    android.util.Log.d("PantryVM", "[DEBUG-SCAN] Scanner remains locked for pending UI")
+                }
             }
         }
     }
+
+
+
 
     private suspend fun handleExistingItemScan(item: PantryItem) {
         if (_uiState.value.isReadOnly) {
@@ -465,12 +488,15 @@ class PantryViewModel(
 
             if (consumeItem.trackingType == TrackingType.BULK_LEVEL || consumeItem.unitsPerPack > 1) {
                 _uiState.update { it.copy(pendingConsumeItem = consumeItem) }
+                // isProcessingScan stays true to block other scans while picker is open
             } else {
                 consumePortion(consumeItem)
                 _uiState.update { it.copy(userNotification = "Consumed 1 unit of ${consumeItem.name}", recognizedItem = consumeItem) }
                 kotlinx.coroutines.delay(800)
                 _uiState.update { it.copy(recognizedItem = null) }
+                isProcessingScan = false // UNLOCK after quick consume
             }
+
         } else {
             // Re-evaluate tracking type and multipack status on scan
             var updatedItem = item
@@ -515,9 +541,10 @@ class PantryViewModel(
             }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
+            isProcessingScan = false // UNLOCK after quick add
         }
-
     }
+
 
     fun assignPendingItemShelf(row: Int, col: Int) {
         if (_uiState.value.isReadOnly) return
@@ -530,12 +557,21 @@ class PantryViewModel(
             android.util.Log.d("PantryVM", "Assigning shelf: row=$row -> shelf=$shelfNumber")
             repository.addItem(newItem)
             _uiState.update { it.copy(pendingNewItem = null, userNotification = "Saved to shelf ${shelfNumber}") }
+            isProcessingScan = false // UNLOCK for next item
         }
     }
 
     fun cancelPendingItem() {
-        _uiState.update { it.copy(pendingNewItem = null) }
+        _uiState.update { it.copy(
+            pendingNewItem = null, 
+            scannedProduct = null,
+            isScannerVisible = false // Dismiss the scanner overlay
+        ) }
+        isProcessingScan = false // UNLOCK
     }
+
+
+
 
     fun updatePendingConsumeLevel(level: FillLevel) {
         val item = _uiState.value.pendingConsumeItem ?: return
@@ -557,20 +593,24 @@ class PantryViewModel(
                 _uiState.update { it.copy(userNotification = "Updated ${item.name} to $level") }
             }
             _uiState.update { it.copy(pendingConsumeItem = null, isScannerVisible = false) }
+            isProcessingScan = false // UNLOCK
         }
     }
-
 
 
     fun updatePendingConsumeUnits(units: Int) {
         val item = _uiState.value.pendingConsumeItem ?: return
         consumeUnits(item, units)
+        // consumeUnits also handles the UI state and scanner close, but needs to unlock
+        isProcessingScan = false // UNLOCK
     }
 
 
     fun cancelPendingConsume() {
         _uiState.update { it.copy(pendingConsumeItem = null) }
+        isProcessingScan = false // UNLOCK
     }
+
 
     fun startManualEntry() {
         _uiState.update { it.copy(scannedProduct = OffProduct(), error = null) }
