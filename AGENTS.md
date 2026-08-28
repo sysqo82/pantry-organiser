@@ -1,5 +1,21 @@
 Always run the entire suite of tests after every code change
 Never EVER touch anything out of the scope of fix, feature or refactor code
+If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\projects\skills` directory. Always refer to that path to read skill instructions.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical five-role vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout. See `docs/agents/domain.md`.
+
 \# UI \& Android Development Terminology Glossary
 
 
