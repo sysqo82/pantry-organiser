@@ -75,23 +75,8 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     val pbShelf = shelfNumber.coerceIn(1, 4)
     val pbZone = zoneIndex.coerceIn(1, 3)
     
-    // Hard-enforce staple tracking type before sending to PB
-    val nameLower = name.lowercase()
-    val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-    val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
-    
-    val enforcedTrackingType = if (trackingType == TrackingType.DISCRETE_COUNT && 
-        unitsPerPack <= 1 && // Never force bulk for multipacks
-        stapleKeywords.any { nameLower.contains(it) } && 
-        discreteKeywords.none { nameLower.contains(it) }
-    ) {
-        TrackingType.BULK_LEVEL
-    } else {
-        trackingType
-    }
-
-    
-    android.util.Log.d("PocketBaseModels", "Syncing $id to PB: shelf=$pbShelf, zone=$pbZone, trackingType=$enforcedTrackingType")
+    // We trust the local trackingType. Classification logic moved to ViewModel.
+    android.util.Log.d("PocketBaseModels", "Syncing $id to PB: shelf=$pbShelf, zone=$pbZone, trackingType=$trackingType")
     
     return PocketBasePantryItem(
         id = id.takeIf { it.isNotEmpty() && !it.startsWith("local_") },
@@ -103,7 +88,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         image = if (imageUrl == null) "" else null, // Explicitly clear PB file field if imageUrl is null (Restore case)
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
-        trackingType = enforcedTrackingType.name,
+        trackingType = trackingType.name,
         sealedCount = sealedCount,
         unitsPerPack = unitsPerPack,
         activeCount = activeCount,
@@ -128,9 +113,17 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val mappedZone = zoneIndex.coerceIn(1, 3)
     
     val mappedTrackingType = try { 
-        TrackingType.valueOf(trackingType) 
+        val serverType = TrackingType.valueOf(trackingType)
+        // SANITY FIX: If server says DISCRETE but our engine rules say BULK (like for flour), 
+        // we override to prevent the infinite fix loop.
+        val inferredType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
+        if (serverType == TrackingType.DISCRETE_COUNT && inferredType == TrackingType.BULK_LEVEL) {
+            TrackingType.BULK_LEVEL
+        } else {
+            serverType
+        }
     } catch (e: Exception) { 
-        TrackingType.DISCRETE_COUNT 
+        PantryItem.determineTrackingType(name, quantity = packageQuantity)
     }
 
     // Heuristic Fallback: If server field is missing, infer from name/quantity.

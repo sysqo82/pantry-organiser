@@ -34,6 +34,9 @@ import com.pantry.organiser.data.PantryItem
 
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert
+import com.pantry.organiser.ui.VisualSearchScreen
+import com.pantry.organiser.ui.ItemDetailActionModal
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.InternalCoroutinesApi::class)
 @Composable
@@ -165,6 +168,62 @@ fun PantryScreen(viewModel: PantryViewModel) {
                         viewModel.updateLocalImageUri(item, path)
                     },
                     onDismiss = { viewModel.cancelPhotoCapture() }
+                )
+            }
+        }
+
+        // VISUAL SEARCH OVERLAY (Tablet Only)
+        if (isTablet) {
+            var interactionKey by remember { mutableStateOf(0) }
+            
+            LaunchedEffect(uiState.isVisualSearchVisible, interactionKey) {
+                if (uiState.isVisualSearchVisible) {
+                    delay(30000)
+                    viewModel.hideVisualSearch()
+                }
+            }
+
+            AnimatedVisibility(
+                visible = uiState.isVisualSearchVisible,
+                enter = fadeIn(tween(300)) + slideInVertically(initialOffsetY = { it / 2 }),
+                exit = fadeOut(tween(300)) + slideOutVertically(targetOffsetY = { it / 2 })
+            ) {
+                VisualSearchScreen(
+                    items = uiState.items,
+                    onItemClick = { 
+                        interactionKey++
+                        viewModel.selectVisualSearchItem(it) 
+                    },
+                    onDismiss = { viewModel.hideVisualSearch() },
+                    onInteraction = { interactionKey++ }
+                )
+            }
+            
+            uiState.visualSearchSelectedItem?.let { item ->
+                ItemDetailActionModal(
+                    item = item,
+                    onConsume = { 
+                        interactionKey++
+                        viewModel.consumeUnits(item, it)
+                        viewModel.hideVisualSearch()
+                    },
+                    onRestock = { 
+                        interactionKey++
+                        viewModel.addSealedUnit(item)
+                        viewModel.hideVisualSearch()
+                    },
+                    onEdit = {
+                        interactionKey++
+                        viewModel.hideVisualSearch()
+                        viewModel.startEditItem(item)
+                    },
+                    onUpdateLevel = { level ->
+                        interactionKey++
+                        viewModel.updateItemFillLevel(item, level)
+                        viewModel.hideVisualSearch()
+                    },
+                    onDismiss = { viewModel.clearVisualSearchItem() },
+                    onInteraction = { interactionKey++ }
                 )
             }
         }
@@ -317,12 +376,29 @@ fun TabletLayout(
                 .weight(0.4f)
                 .fillMaxHeight()
         ) {
-            Text(
-                text = "Pantry Organiser",
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Pantry Organiser",
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Black
+                )
+                
+                IconButton(
+                    onClick = { viewModel.showVisualSearch() },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Visual Search",
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
 
             PantryShelfGrid(
                 selectedCell = uiState.selectedShelf,

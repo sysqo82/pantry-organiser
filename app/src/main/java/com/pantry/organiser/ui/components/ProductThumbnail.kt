@@ -38,7 +38,8 @@ fun ProductThumbnail(
     itemName: String,
     modifier: Modifier = Modifier,
     thumbnailSize: Dp? = 64.dp,
-    updatedAt: Long = 0L
+    updatedAt: Long = 0L,
+    contentScale: ContentScale = ContentScale.Crop
 ) {
     val context = LocalContext.current
     
@@ -97,7 +98,7 @@ fun ProductThumbnail(
                 model = model,
                 contentDescription = itemName,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
+                contentScale = contentScale,
                 onError = { state ->
                     val error = state.result.throwable
                     android.util.Log.e("ProductThumbnail", "[$itemName] Load failed for $imageSource: ${error.message}")

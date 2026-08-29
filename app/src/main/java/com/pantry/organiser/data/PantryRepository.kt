@@ -43,41 +43,7 @@ class PantryRepository @JvmOverloads constructor(
                     needsUpdate = true
                 }
                 
-                // 3. Zone Index Fix (0 -> 1 or out of bounds)
-                if (item.zoneIndex !in 1..3) {
-                    val fixedZone = item.zoneIndex.coerceIn(1, 3)
-                    android.util.Log.i("PantryRepository", "Fixing zone index for item ${item.id}: ${item.zoneIndex} -> $fixedZone")
-                    updatedItem = updatedItem.copy(zoneIndex = fixedZone)
-                    needsUpdate = true
-                }
-
-                // 4. Retroactive Staple Fix: Force items like "Sugar" or "Flour" to BULK_LEVEL
-                val nameLower = item.name.lowercase()
-                val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-                val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
-                
-                if (item.trackingType == TrackingType.DISCRETE_COUNT && 
-                    stapleKeywords.any { nameLower.contains(it) } &&
-                    discreteKeywords.none { nameLower.contains(it) }
-                ) {
-                    android.util.Log.i("PantryRepository", "Retroactively fixing tracking type for staple: ${item.name}")
-                    updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
-                    needsUpdate = true
-                }
-
-                // 5. Multipack Heuristic Fix
-                if (updatedItem.unitsPerPack <= 1) {
-                    val inferred = PantryItem.inferUnitsPerPack(updatedItem.name, updatedItem.packageQuantity)
-                    if (inferred > 1) {
-                        updatedItem = updatedItem.copy(
-                            unitsPerPack = inferred,
-                            // Only upgrade count if it was a single item (1) AND we're discovering it for the first time
-                            activeCount = if (updatedItem.activeCount <= 1) inferred else updatedItem.activeCount
-                        )
-                        needsUpdate = true
-                        android.util.Log.i("PantryRepository", "Retroactively fixing multipack for: ${item.name} ($inferred-pack)")
-                    }
-                }
+                // Multipack Heuristic Fix removed here - handled by ViewModel Sanity Check
 
 
                 // 6. API Image Fix-up: Move OFF links from old imageUrl field to apiImageUrl if missing
@@ -252,30 +218,8 @@ class PantryRepository @JvmOverloads constructor(
     private suspend fun mergeAndInsert(remoteItem: PantryItem) {
         val existing = pantryDao.getItemById(remoteItem.id)
         
-        // Hard-enforce staple tracking type on inbound data
-        var finalItem = remoteItem
-        val nameLower = finalItem.name.lowercase()
-        val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-        val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
-        
-        if (finalItem.trackingType == TrackingType.DISCRETE_COUNT && 
-            stapleKeywords.any { nameLower.contains(it) } &&
-            discreteKeywords.none { nameLower.contains(it) }
-        ) {
-            finalItem = finalItem.copy(trackingType = TrackingType.BULK_LEVEL)
-            android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} corrected to Staple mode.")
-        }
-
-        // Multipack Fallback: If server says 1 but name/quantity suggests more, fix it
-        if (finalItem.unitsPerPack <= 1) {
-            val inferred = PantryItem.inferUnitsPerPack(finalItem.name, finalItem.packageQuantity)
-            if (inferred > 1) {
-                // IMPORTANT: We trust the server's activeCount. 
-                // We only upgrade unitsPerPack to enable multipack UI behavior.
-                finalItem = finalItem.copy(unitsPerPack = inferred)
-                android.util.Log.i("PantryRepository", "Inbound update for ${finalItem.name} unitsPerPack corrected to $inferred.")
-            }
-        }
+        // Use inbound data as-is. Classification logic moved to ViewModel/SanityCheck.
+        val finalItem = remoteItem
 
         
         // CONTENT-BASED COMPARISON: Only skip if core fields are identical.

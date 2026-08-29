@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.testTag
 import com.pantry.organiser.data.PantryItem
 
 @Composable
@@ -42,13 +43,14 @@ fun PantryShelfGrid(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(3) { col ->
+                    val label = getCellLabel(row, col)
                     val isSelected = selectedCell?.first == row && selectedCell?.second == col
                     val isItemLocation = highlightedItem != null && 
                                        highlightedItem.safeShelfNumber == (4 - row) && 
                                        highlightedItem.safeZoneIndex == (col + 1)
                     
                     ShelfCell(
-                        label = getCellLabel(row, col),
+                        label = label,
                         isSelected = isSelected,
                         imageUrl = if (isItemLocation) highlightedItem?.imageUrl else null,
                         apiImageUrl = if (isItemLocation) highlightedItem?.apiImageUrl else null,
@@ -56,7 +58,9 @@ fun PantryShelfGrid(
                         itemInitial = if (isItemLocation) highlightedItem?.name?.take(1)?.uppercase() else null,
                         updatedAt = if (isItemLocation) highlightedItem?.updatedAt ?: 0L else 0L,
                         onClick = { onCellClick(row, col) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("ShelfCell_$label")
                     )
                 }
             }

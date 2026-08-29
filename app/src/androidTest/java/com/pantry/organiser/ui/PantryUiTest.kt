@@ -26,11 +26,11 @@ class PantryUiTest {
     @Test
     fun clickingShelfCell_filtersList() {
         // Initially should show all (or none if empty, but here we check interaction)
-        composeTestRule.onNodeWithText("S4-M").performClick()
+        composeTestRule.onNodeWithTag("ShelfCell_S4-M").performClick()
         
         // After clicking, the cell should probably show some selection state 
         // In our code it changes background alpha, but for now we just verify it doesn't crash
-        composeTestRule.onNodeWithText("S4-M").assertExists()
+        composeTestRule.onNodeWithTag("ShelfCell_S4-M").assertExists()
     }
 
     @Test

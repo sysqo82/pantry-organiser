@@ -68,6 +68,32 @@ data class PantryItem(
     val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 4)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
 
+    /**
+     * Unified inventory count for display across all screens.
+     * Discrete: returns sealedCount (which represents total units).
+     * Bulk: returns sealedCount + 1 (if active pack is not EMPTY).
+     */
+    val totalDisplayCount: Int get() = when (trackingType) {
+        TrackingType.DISCRETE_COUNT -> sealedCount
+        TrackingType.BULK_LEVEL -> if (activeFill != FillLevel.EMPTY) sealedCount + 1 else sealedCount
+    }
+
+    /**
+     * True if there is any inventory available (sealed or active).
+     */
+    val hasStock: Boolean get() = totalDisplayCount > 0
+
+    /**
+     * Returns the appropriate unit label for the current display count.
+     */
+    fun getDisplayUnitLabel(isPlural: Boolean = totalDisplayCount != 1): String {
+        return when {
+            trackingType == TrackingType.BULK_LEVEL -> if (isPlural) "Portions" else "Portion"
+            unitsPerPack > 1 -> if (isPlural) "Cans/Tins" else "Can/Tin"
+            else -> if (isPlural) "Units" else "Unit"
+        }
+    }
+
     companion object {
         /**
          * Heuristic to extract bundle size (e.g. "4 x 100g", "3x80g", "4x 200ml", "4 Pack", "Pack of 6")
@@ -115,6 +141,72 @@ data class PantryItem(
             }
             
             return 1
+        }
+
+        /**
+         * Centralized logic to determine if an item should use BULK_LEVEL (weight-based) 
+         * or DISCRETE_COUNT (unit-based) tracking.
+         */
+        fun determineTrackingType(
+            name: String,
+            categories: List<String>? = null,
+            quantity: String? = null
+        ): TrackingType {
+            val strictBulkKeywords = listOf(
+                "flour", "sugar", "rice", "pasta", "cooking oil", "olive oil", 
+                "vegetable oil", "sunflower oil", "cereal", "oats", "lentils", 
+                "baking powder"
+            )
+            
+            val forceDiscreteKeywords = listOf(
+                "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
+                "vinegar", "dressing", "can", "tin", "jar", "bottle", "spray"
+            )
+
+            val categoriesCombined = categories?.joinToString(" ")?.lowercase() ?: ""
+            val quantityLower = quantity?.lowercase() ?: ""
+            val nameLower = name.lowercase()
+
+            // 0. Explicit Discrete Keywords (Highest Priority for containers/liquids that aren't bulk oils)
+            // Use word boundaries to prevent matching "tin" in "margheritine"
+            if (forceDiscreteKeywords.any { keyword ->
+                val regex = Regex("\\b${Regex.escape(keyword)}\\b")
+                categoriesCombined.contains(regex) || 
+                quantityLower.contains(regex) || 
+                nameLower.contains(regex)
+            }) {
+                return TrackingType.DISCRETE_COUNT
+            }
+
+            // 1. Strict Bulk Keywords check (Including standalone "salt")
+            if (strictBulkKeywords.any { keyword ->
+                val regex = Regex("\\b${Regex.escape(keyword)}\\b")
+                categoriesCombined.contains(regex) || nameLower.contains(regex)
+            } || nameLower.contains(Regex("\\bsalt\\b"))) {
+                return TrackingType.BULK_LEVEL
+            }
+
+            // 3. Size/Unit Heuristics Fallback
+            if (quantityLower.isNotEmpty()) {
+                // Check for large quantities (>= 1kg or >= 1L)
+                val hasLargeUnit = quantityLower.contains("kg") || 
+                                 quantityLower.contains(" l ") || 
+                                 quantityLower.contains("liter") ||
+                                 quantityLower.contains("litre")
+                
+                if (hasLargeUnit) return TrackingType.BULK_LEVEL
+                
+                // Try to extract number for grams/ml
+                val regex = """(\d+)\s*(g|ml)""".toRegex()
+                val match = regex.find(quantityLower)
+                if (match != null) {
+                    val value = match.groupValues[1].toIntOrNull() ?: 0
+                    if (value >= 1000) return TrackingType.BULK_LEVEL
+                }
+            }
+
+            // 4. Safe Default
+            return TrackingType.DISCRETE_COUNT
         }
 
 
