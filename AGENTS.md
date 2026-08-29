@@ -1,4 +1,4 @@
-Always run the entire suite of tests after every code change
+ALWAYS!!!!!!!! run the entire suite of tests after every code change, ALWAYS!!!!!
 Never EVER touch anything out of the scope of fix, feature or refactor code
 If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\projects\skills` directory. Always refer to that path to read skill instructions.
 

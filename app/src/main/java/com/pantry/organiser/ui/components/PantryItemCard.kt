@@ -133,18 +133,10 @@ fun PantryItemCard(
                 ) {
                     // Sealed Pill
                     SealedStockPill(
-                        count = if (item.trackingType == TrackingType.BULK_LEVEL) {
-                            item.sealedCount + (if (item.activeFill != FillLevel.EMPTY) 1 else 0)
-                        } else {
-                            item.sealedCount
-                        },
-                        unitsPerPack = item.unitsPerPack,
+                        item = item,
                         onAdd = onAddSealed,
                         onRemove = onRemoveSealed
                     )
-
-
-
 
                     // Active Fill Control (Only for Staples)
                     if (item.trackingType == TrackingType.BULK_LEVEL) {
@@ -183,17 +175,8 @@ fun PantryItemCard(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         shape = CircleShape
                     ) {
-                        val displayCount = if (item.unitsPerPack > 1) {
-                            (item.sealedCount + item.unitsPerPack - 1) / item.unitsPerPack
-                        } else {
-                            item.sealedCount
-                        }
-                        
-                        val label = if (item.unitsPerPack > 1) "Packs" else "Items"
-                        val countText = displayCount.toString()
-                        
                         Text(
-                            text = "$countText $label",
+                            text = "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -220,8 +203,7 @@ fun PantryItemCard(
 
 @Composable
 fun SealedStockPill(
-    count: Int,
-    unitsPerPack: Int,
+    item: PantryItem,
     onAdd: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -244,14 +226,8 @@ fun SealedStockPill(
             Spacer(modifier = Modifier.width(4.dp))
             
             Column(horizontalAlignment = Alignment.Start) {
-                val displayCount = if (unitsPerPack > 1) {
-                    (count + unitsPerPack - 1) / unitsPerPack
-                } else {
-                    count
-                }
-                
                 Text(
-                    text = "$displayCount Items",
+                    text = "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )

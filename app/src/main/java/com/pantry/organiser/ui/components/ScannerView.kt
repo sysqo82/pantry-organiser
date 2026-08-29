@@ -890,13 +890,13 @@ fun CameraPreview(
                     )
                     cameraControlRef.value = camera.cameraControl
                     
-                    // STAGE 1: Exposure Compensation for difficult labels
-                    // We bump exposure by +1 index to brighten up dark labels (like soy sauce)
-                    // provided the hardware supports it.
+                    // STAGE 1: Adaptive Exposure Control
+                    // Shiny objects (flour, pasta) suffer from glare. 
+                    // We use a more subtle bump (+1) instead of +3 to reduce washout.
                     val exposureState = camera.cameraInfo.exposureState
                     if (exposureState.isExposureCompensationSupported) {
                         val range = exposureState.exposureCompensationRange
-                        val targetIndex = (exposureState.exposureCompensationIndex + 3).coerceIn(range.lower, range.upper)
+                        val targetIndex = (exposureState.exposureCompensationIndex + 1).coerceIn(range.lower, range.upper)
                         camera.cameraControl.setExposureCompensationIndex(targetIndex)
                         Log.d("ScannerView", "Exposure compensated: $targetIndex (Range: $range)")
                     }

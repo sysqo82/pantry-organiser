@@ -291,35 +291,136 @@ class PantryViewModelTest {
     @Test
     fun `determineTrackingType categorizes flour as Bulk`() {
         val product = OffProduct(productName = "Plain Flour", categoriesTags = listOf("en:flours"), weight = "1kg")
-        assertEquals(TrackingType.BULK_LEVEL, viewModel.determineTrackingType(product))
+        assertEquals(TrackingType.BULK_LEVEL, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
     }
 
     @Test
     fun `determineTrackingType categorizes small soy sauce as Discrete`() {
         val product = OffProduct(productName = "Soy Sauce", categoriesTags = listOf("en:sauces"), weight = "250ml")
-        assertEquals(TrackingType.DISCRETE_COUNT, viewModel.determineTrackingType(product))
+        assertEquals(TrackingType.DISCRETE_COUNT, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
     }
 
     @Test
     fun `determineTrackingType categorizes Flour Pack as Bulk`() {
         // "pack" used to force discrete, but now "flour" should take precedence
         val product = OffProduct(productName = "Strong White Flour Pack", weight = "1.5kg")
-        assertEquals(TrackingType.BULK_LEVEL, viewModel.determineTrackingType(product))
+        assertEquals(TrackingType.BULK_LEVEL, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
     }
 
     @Test
     fun `determineTrackingType categorizes large 5L oil as Bulk`() {
         val product = OffProduct(productName = "Cooking Oil", weight = "5 l")
-        assertEquals(TrackingType.BULK_LEVEL, viewModel.determineTrackingType(product))
+        assertEquals(TrackingType.BULK_LEVEL, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
     }
 
     @Test
     fun `determineTrackingType categorizes multipack as Discrete`() {
         val product = OffProduct(productName = "Coke 6 pack", weight = "6x330ml")
         val unitsPerPack = product.inferUnitsPerPack()
-        var trackingType = viewModel.determineTrackingType(product)
+        var trackingType = PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        )
         if (unitsPerPack > 1) trackingType = TrackingType.DISCRETE_COUNT
         assertEquals(TrackingType.DISCRETE_COUNT, trackingType)
+    }
+
+    @Test
+    fun `determineTrackingType categorizes spray as Discrete`() {
+        val product = OffProduct(productName = "Cooking Spray", weight = "190ml")
+        assertEquals(TrackingType.DISCRETE_COUNT, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
+    }
+
+    @Test
+    fun `determineTrackingType categorizes soy sauce as Discrete`() {
+        val product = OffProduct(productName = "Reduced Salt Soy Sauce", weight = "150ml")
+        assertEquals(TrackingType.DISCRETE_COUNT, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
+    }
+
+    @Test
+    fun `determineTrackingType categorizes soup pasta as Bulk`() {
+        val product = OffProduct(productName = "Margheritine Soup Pasta", weight = "500g")
+        assertEquals(TrackingType.BULK_LEVEL, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
+    }
+
+    @Test
+    fun `determineTrackingType categorizes cooking spray as Discrete`() {
+        val product = OffProduct(productName = "Mild and light rapeseed oil cooking spray", weight = "190 ml")
+        assertEquals(TrackingType.DISCRETE_COUNT, PantryItem.determineTrackingType(
+            product.displayProductName ?: "",
+            product.categoriesTags,
+            product.weight
+        ))
+    }
+
+    @Test
+    fun `performDataSanityCheck auto-rolls empty bulk pack if sealed exists`() = runTest {
+        val item = PantryItem(
+            id = "bulk1",
+            name = "Pasta",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.BULK_LEVEL,
+            sealedCount = 1,
+            activeFill = FillLevel.EMPTY
+        )
+        every { repository.allItems } returns flowOf(listOf(item))
+        
+        // This will trigger the init block which calls performDataSanityCheck
+        viewModel = PantryViewModel(repository, offRepository)
+        
+        // Sanity check is triggered via collect, so we need to wait for the update
+        coVerify(timeout = 2000) { 
+            repository.updateItem(match { 
+                it.id == "bulk1" && it.sealedCount == 0 && it.activeFill == FillLevel.FULL 
+            }) 
+        }
+    }
+
+    @Test
+    fun `scanBarcode initializes discrete items with 1 pack`() = runTest {
+        val product = OffProduct(productName = "Soy Sauce", brands = "Tesco", weight = "150ml")
+        coEvery { repository.getItemByBarcode("505") } returns null
+        coEvery { offRepository.getProduct("505") } returns product
+        
+        viewModel.scanBarcode("505")
+        
+        viewModel.uiState.test {
+            val state = awaitItem()
+            // Should be Discrete and have 1 unit (unitsPerPack=1)
+            assertEquals(TrackingType.DISCRETE_COUNT, state.pendingNewItem?.trackingType)
+            assertEquals(1, state.pendingNewItem?.sealedCount)
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
 
@@ -458,6 +559,31 @@ class PantryViewModelTest {
             
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `showVisualSearch updates state correctly`() = runTest {
+        viewModel.showVisualSearch()
+        assertTrue(viewModel.uiState.value.isVisualSearchVisible)
+    }
+
+    @Test
+    fun `hideVisualSearch clears selection and visibility`() = runTest {
+        val item = PantryItem(id = "1", name = "Test", shelfNumber = 1, zoneIndex = 1)
+        viewModel.showVisualSearch()
+        viewModel.selectVisualSearchItem(item)
+        
+        viewModel.hideVisualSearch()
+        
+        assertFalse(viewModel.uiState.value.isVisualSearchVisible)
+        assertNull(viewModel.uiState.value.visualSearchSelectedItem)
+    }
+
+    @Test
+    fun `selectVisualSearchItem updates selected item`() = runTest {
+        val item = PantryItem(id = "1", name = "Test", shelfNumber = 1, zoneIndex = 1)
+        viewModel.selectVisualSearchItem(item)
+        assertEquals(item, viewModel.uiState.value.visualSearchSelectedItem)
     }
 
 }

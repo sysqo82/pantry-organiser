@@ -25,7 +25,9 @@ data class PantryUiState(
     val photoCaptureItem: PantryItem? = null,
     val pendingNewItem: PantryItem? = null,
     val pendingConsumeItem: PantryItem? = null,
-    val isReadOnly: Boolean = false // Device-level capability lock
+    val isReadOnly: Boolean = false, // Device-level capability lock
+    val isVisualSearchVisible: Boolean = false,
+    val visualSearchSelectedItem: PantryItem? = null
 )
 
 class PantryViewModel(
@@ -42,16 +44,67 @@ class PantryViewModel(
     init {
         viewModelScope.launch {
             repository.allItems.collect { items ->
+                val saneItems = performDataSanityCheck(items)
                 _uiState.update { 
                     it.copy(
-                        items = items,
-                        filteredItems = filterItems(items, it.selectedShelf),
+                        items = saneItems,
+                        filteredItems = filterItems(saneItems, it.selectedShelf),
                         editingItem = it.editingItem?.let { current -> 
-                            items.find { item -> item.id == current.id } ?: current 
+                            saneItems.find { item -> item.id == current.id } ?: current 
                         }
                     ) 
                 }
             }
+        }
+    }
+
+    /**
+     * One-time or per-observer check to fix inconsistent data states:
+     * 1. Re-classify items based on current engine rules (e.g. spray -> discrete).
+     * 2. Auto-open a sealed pack if the active pack is empty but sealed packs exist.
+     */
+    private fun performDataSanityCheck(items: List<PantryItem>): List<PantryItem> {
+        return items.map { item ->
+            var updated = item
+            
+            // 1. Re-classification check
+            val correctType = PantryItem.determineTrackingType(item.name, quantity = item.packageQuantity)
+            if (item.trackingType != correctType) {
+                android.util.Log.d("PantryVM", "Sanity Fix: Re-classifying ${item.name} to $correctType")
+                updated = updated.copy(trackingType = correctType)
+                // If switching to Discrete, ensure sealedCount is at least 1 if we had any active stock
+                if (correctType == TrackingType.DISCRETE_COUNT && updated.sealedCount == 0 && item.activeFill != FillLevel.EMPTY) {
+                    updated = updated.copy(sealedCount = 1)
+                }
+            }
+
+            // 2. Multipack Detection check
+            val correctUnitsPerPack = PantryItem.inferUnitsPerPack(item.name, item.packageQuantity)
+            if (updated.unitsPerPack != correctUnitsPerPack) {
+                android.util.Log.d("PantryVM", "Sanity Fix: Correcting unitsPerPack for ${item.name} to $correctUnitsPerPack")
+                updated = updated.copy(
+                    unitsPerPack = correctUnitsPerPack,
+                    // If it was a legacy single unit but it's actually a multipack, upgrade the count
+                    sealedCount = if (updated.sealedCount <= 1) correctUnitsPerPack else updated.sealedCount
+                )
+            }
+
+            // 3. Active Pack Auto-Roll (Fix for "1 Portion - Empty")
+            if (updated.trackingType == TrackingType.BULK_LEVEL && 
+                updated.activeFill == FillLevel.EMPTY && 
+                updated.sealedCount > 0) {
+                android.util.Log.d("PantryVM", "Sanity Fix: Opening sealed pack for ${item.name}")
+                updated = updated.copy(
+                    sealedCount = updated.sealedCount - 1,
+                    activeFill = FillLevel.FULL,
+                    updatedAt = System.currentTimeMillis()
+                )
+            }
+
+            if (updated !== item) {
+                viewModelScope.launch { repository.updateItem(updated) }
+            }
+            updated
         }
     }
 
@@ -71,6 +124,21 @@ class PantryViewModel(
         _uiState.update { it.copy(isReadOnly = readOnly) }
     }
 
+    fun showVisualSearch() {
+        _uiState.update { it.copy(isVisualSearchVisible = true) }
+    }
+
+    fun hideVisualSearch() {
+        _uiState.update { it.copy(isVisualSearchVisible = false, visualSearchSelectedItem = null) }
+    }
+
+    fun selectVisualSearchItem(item: PantryItem) {
+        _uiState.update { it.copy(visualSearchSelectedItem = item) }
+    }
+
+    fun clearVisualSearchItem() {
+        _uiState.update { it.copy(visualSearchSelectedItem = null) }
+    }
 
     fun selectItem(item: PantryItem) {
         _uiState.update { 
@@ -410,8 +478,11 @@ class PantryViewModel(
                         return@launch
                     }
                     
-                    var trackingType = determineTrackingType(product)
-
+                    var trackingType = PantryItem.determineTrackingType(
+                        product.displayProductName ?: "",
+                        product.categoriesTags,
+                        product.weight
+                    )
 
                     val unitsPerPack = product.inferUnitsPerPack()
                     if (unitsPerPack > 1) trackingType = TrackingType.DISCRETE_COUNT
@@ -427,7 +498,9 @@ class PantryViewModel(
                         barcode = trimmedBarcode,
                         trackingType = trackingType,
                         unitsPerPack = unitsPerPack,
-                        sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 0
+                        // Fix: Initialize discrete items with at least 1 pack (unitsPerPack units)
+                        sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 0,
+                        activeFill = if (trackingType == TrackingType.BULK_LEVEL) FillLevel.FULL else FillLevel.EMPTY
                     )
                     _uiState.update { it.copy(isLoading = false, pendingNewItem = tempItem) }
                     // Flag stays true to block other scans while choosing shelf
@@ -498,47 +571,11 @@ class PantryViewModel(
             }
 
         } else {
-            // Re-evaluate tracking type and multipack status on scan
-            var updatedItem = item
-            val nameLower = item.name.lowercase()
-            val stapleKeywords = listOf("flour", "sugar", "rice", "pasta", "cereal", "oats", "lentils", "oil", "salt", "syrup", "honey")
-            val discreteKeywords = listOf("sauce", "vinegar", "ketchup", "mayonnaise")
-            
-            var needsRepoUpdate = false
-
-            if (item.trackingType == TrackingType.DISCRETE_COUNT && 
-                stapleKeywords.any { nameLower.contains(it) } &&
-                discreteKeywords.none { nameLower.contains(it) }
-            ) {
-                updatedItem = updatedItem.copy(trackingType = TrackingType.BULK_LEVEL)
-                needsRepoUpdate = true
-                android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to Staple mode")
-            }
-
-            // Re-evaluate multipack if current is 1
-            if (updatedItem.unitsPerPack <= 1) {
-                val inferredUnits = PantryItem.inferUnitsPerPack(updatedItem.name, updatedItem.packageQuantity)
-                if (inferredUnits > 1) {
-                    updatedItem = updatedItem.copy(
-                        unitsPerPack = inferredUnits,
-                        trackingType = TrackingType.DISCRETE_COUNT, // Force discrete for multipacks
-                        sealedCount = if (updatedItem.sealedCount <= 1) inferredUnits else updatedItem.sealedCount
-                    )
-                    needsRepoUpdate = true
-                    android.util.Log.d("PantryVM", "Auto-upgraded ${item.name} to ${inferredUnits}-pack Discrete")
-                }
-            }
-
-
-            if (needsRepoUpdate) {
-                repository.updateItem(updatedItem)
-            }
-
-            addSealedUnit(updatedItem)
-            if (updatedItem.sealedCount >= 0) {
-                val label = getCellLabel((4 - updatedItem.shelfNumber).coerceIn(0, 3), (updatedItem.zoneIndex - 1).coerceIn(0, 2))
-                _uiState.update { it.copy(userNotification = "Added 1 pack to $label", recognizedItem = updatedItem) }
-            }
+            // Add mode: Increment stock.
+            // Note: Data sanity check handles type/multipack re-evaluation on emission.
+            addSealedUnit(item)
+            val label = getCellLabel((4 - item.shelfNumber).coerceIn(0, 3), (item.zoneIndex - 1).coerceIn(0, 2))
+            _uiState.update { it.copy(userNotification = "Added 1 pack to $label", recognizedItem = item) }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
             isProcessingScan = false // UNLOCK after quick add
@@ -573,8 +610,8 @@ class PantryViewModel(
 
 
 
-    fun updatePendingConsumeLevel(level: FillLevel) {
-        val item = _uiState.value.pendingConsumeItem ?: return
+    fun updateItemFillLevel(item: PantryItem, level: FillLevel) {
+        if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
             if (level == FillLevel.EMPTY) {
                 if (item.sealedCount > 0) {
@@ -590,11 +627,16 @@ class PantryViewModel(
                 }
             } else {
                 repository.updateItem(item.copy(activeFill = level, updatedAt = System.currentTimeMillis()))
-                _uiState.update { it.copy(userNotification = "Updated ${item.name} to $level") }
+                _uiState.update { it.copy(userNotification = "Updated ${item.name} to ${level.label}") }
             }
-            _uiState.update { it.copy(pendingConsumeItem = null, isScannerVisible = false) }
-            isProcessingScan = false // UNLOCK
         }
+    }
+
+    fun updatePendingConsumeLevel(level: FillLevel) {
+        val item = _uiState.value.pendingConsumeItem ?: return
+        updateItemFillLevel(item, level)
+        _uiState.update { it.copy(pendingConsumeItem = null, isScannerVisible = false) }
+        isProcessingScan = false // UNLOCK
     }
 
 
@@ -691,63 +733,5 @@ class PantryViewModel(
             val targetZone = (selection.second + 1).coerceIn(1, 3)
             items.filter { it.shelfNumber.coerceIn(1, 4) == targetShelf && it.zoneIndex.coerceIn(1, 3) == targetZone }
         }
-    }
-
-    internal fun determineTrackingType(product: OffProduct): TrackingType {
-        val categories = product.categoriesTags
-        val quantity = product.weight
-        val name = product.displayProductName ?: ""
-
-        val strictBulkKeywords = listOf(
-            "flour", "sugar", "rice", "pasta", "cooking oil", "olive oil", 
-            "vegetable oil", "sunflower oil", "cereal", "oats", "lentils", 
-            "baking powder", "salt"
-        )
-        
-        // Removed "pack" as it's too aggressive for items like "Flour Pack"
-        val forceDiscreteKeywords = listOf(
-            "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
-            "vinegar", "dressing", "can", "tin", "jar", "bottle"
-        )
-
-        val categoriesCombined = categories?.joinToString(" ")?.lowercase() ?: ""
-        val quantityLower = quantity?.lowercase() ?: ""
-        val nameLower = name.lowercase()
-
-        // 1. Strict Bulk Keywords check (Highest Priority)
-        // These are staples typically managed by fill level (dry goods and oils).
-        if (strictBulkKeywords.any { categoriesCombined.contains(it) || nameLower.contains(it) }) {
-            return TrackingType.BULK_LEVEL
-        }
-
-        // 2. Force Discrete check
-        // If it's explicitly a sauce, condiment, or mentions a container (bottle/jar), it's discrete.
-        if (forceDiscreteKeywords.any { 
-            categoriesCombined.contains(it) || quantityLower.contains(it) || nameLower.contains(it) 
-        }) {
-            return TrackingType.DISCRETE_COUNT
-        }
-
-        // 3. Size/Unit Heuristics Fallback
-        if (quantityLower.isNotEmpty()) {
-            // Check for large quantities (>= 1kg or >= 1L)
-            val hasLargeUnit = quantityLower.contains("kg") || 
-                             quantityLower.contains(" l ") || 
-                             quantityLower.contains("liter") ||
-                             quantityLower.contains("litre")
-            
-            if (hasLargeUnit) return TrackingType.BULK_LEVEL
-            
-            // Try to extract number for grams/ml
-            val regex = """(\d+)\s*(g|ml)""".toRegex()
-            val match = regex.find(quantityLower)
-            if (match != null) {
-                val value = match.groupValues[1].toIntOrNull() ?: 0
-                if (value >= 1000) return TrackingType.BULK_LEVEL
-            }
-        }
-
-        // 4. Safe Default
-        return TrackingType.DISCRETE_COUNT
     }
 }
