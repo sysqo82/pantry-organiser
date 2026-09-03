@@ -47,6 +47,8 @@ data class PocketBasePantryItem(
     @SerialName("shelf_number") val shelfNumber: Int = 1,
     @SerialName("zone_index") val zoneIndex: Int = 1,
     @SerialName("sealed_count") val sealedCount: Int = 0,
+    @SerialName("units_per_pack") val unitsPerPack: Int? = null,
+    @SerialName("active_count") val activeCount: Int? = null,
     @SerialName("active_fill") val activeFill: String = "FULL",
     @SerialName("is_assigned") val isAssigned: Boolean? = null,
     @SerialName("created") val created: String? = null,
@@ -73,6 +75,8 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
         sealedCount = sealedCount,
+        unitsPerPack = unitsPerPack,
+        activeCount = activeCount,
         activeFill = activeFill.name,
         isAssigned = isAssigned
     )
@@ -84,7 +88,8 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val mappedShelf = rawShelf.coerceIn(1, 4)
     val mappedZone = rawZone.coerceIn(1, 3)
 
-    val inferredUnits = PantryItem.inferUnitsPerPack(name, packageQuantity)
+    val inferredUnits = unitsPerPack ?: PantryItem.inferUnitsPerPack(name, packageQuantity)
+    val effectiveActiveCount = activeCount ?: inferredUnits
     val mappedTrackingType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
     val rawFill = activeFill.ifBlank { "FULL" }
 
@@ -104,7 +109,7 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         trackingType = mappedTrackingType,
         sealedCount = sealedCount,
         unitsPerPack = inferredUnits,
-        activeCount = inferredUnits,
+        activeCount = effectiveActiveCount,
         activeFill = try { FillLevel.valueOf(rawFill) } catch (e: Exception) { FillLevel.FULL },
         isAssigned = effectiveIsAssigned
     )
