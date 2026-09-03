@@ -1,5 +1,6 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.PantryItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,7 +71,10 @@ class PantryRepository @JvmOverloads constructor(
             pocketBaseApi.realtimeEvents.collect { event ->
                 when (event.action) {
                     "create", "update" -> mergeAndInsert(event.record.toLocal())
-                    "delete" -> pantryDao.deleteItem(event.record.toLocal())
+                    "delete" -> {
+                        val item = event.record.toLocal()
+                        pantryDao.deleteByIdOrBarcode(item.id, item.barcode)
+                    }
                 }
             }
         }

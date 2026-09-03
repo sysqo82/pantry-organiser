@@ -27,10 +27,10 @@ import android.content.res.Configuration
 import androidx.compose.ui.res.stringResource
 import com.pantry.organiser.R
 import kotlinx.coroutines.delay
-import com.pantry.organiser.data.TrackingType
+import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.ui.components.*
 import com.pantry.organiser.ui.ScannerMode
-import com.pantry.organiser.data.PantryItem
+import com.pantry.organiser.core.model.PantryItem
 
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.MoreVert

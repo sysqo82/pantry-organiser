@@ -1,5 +1,6 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.PantryItem
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
 
@@ -28,4 +29,13 @@ interface PantryDao {
 
     @Delete
     suspend fun deleteItem(item: PantryItem)
+
+    @Query("DELETE FROM pantry_items WHERE id = :id OR (barcode IS NOT NULL AND barcode = :barcode)")
+    suspend fun deleteByIdOrBarcode(id: String, barcode: String? = null)
+
+    @Query("DELETE FROM pantry_items WHERE id NOT IN (:validIds) AND id NOT LIKE 'local_%'")
+    suspend fun deleteItemsNotIn(validIds: List<String>)
+
+    @Query("DELETE FROM pantry_items WHERE id NOT LIKE 'local_%'")
+    suspend fun deleteAllServerItems()
 }

@@ -1,5 +1,7 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PantryTypeConverters
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room

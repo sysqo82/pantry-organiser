@@ -1,5 +1,7 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4

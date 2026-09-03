@@ -18,9 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.pantry.organiser.data.FillLevel
-import com.pantry.organiser.data.PantryItem
-import com.pantry.organiser.data.TrackingType
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,7 +86,8 @@ fun EditItemBottomSheet(
                 )
                 
                 // Show Restore if we have a custom photo (local or remote) AND an API image to restore to
-                val hasCustomPhoto = item.localImageUri != null || (item.imageUrl != null && !item.imageUrl.contains("openfoodfacts.org"))
+                val currentImageUrl = item.imageUrl
+                val hasCustomPhoto = item.localImageUri != null || (currentImageUrl != null && !currentImageUrl.contains("openfoodfacts.org"))
                 val hasOriginalImage = item.apiImageUrl != null
                 
                 if (!isReadOnly && hasCustomPhoto && hasOriginalImage) {

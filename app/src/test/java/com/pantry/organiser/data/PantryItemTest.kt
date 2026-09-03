@@ -1,13 +1,16 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class PantryItemTest {
 
     @Test
-    fun `totalDisplayCount for discrete items returns sealedCount`() {
-        val item = PantryItem(
+    fun `totalDisplayCount for discrete items returns sealedCount or total multipack units`() {
+        val single = PantryItem(
             id = "1",
             name = "Coke",
             trackingType = TrackingType.DISCRETE_COUNT,
@@ -16,7 +19,20 @@ class PantryItemTest {
             shelfNumber = 1,
             zoneIndex = 1
         )
-        assertEquals(5, item.totalDisplayCount)
+        assertEquals(5, single.totalDisplayCount)
+
+        val multipack = PantryItem(
+            id = "2",
+            name = "Sweetcorn 3-pack",
+            trackingType = TrackingType.DISCRETE_COUNT,
+            sealedCount = 1,
+            unitsPerPack = 3,
+            activeCount = 2,
+            shelfNumber = 1,
+            zoneIndex = 1
+        )
+        // 1 sealed pack * 3 + 2 active = 5 tins
+        assertEquals(5, multipack.totalDisplayCount)
     }
 
     @Test

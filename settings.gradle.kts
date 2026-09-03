@@ -21,3 +21,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "organiser-organiser"
 include(":app")
+include(":core")
+include(":app-ingestion")
+include(":app-dashboard")

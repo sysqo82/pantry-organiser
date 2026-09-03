@@ -1,5 +1,6 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.PantryItem
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
