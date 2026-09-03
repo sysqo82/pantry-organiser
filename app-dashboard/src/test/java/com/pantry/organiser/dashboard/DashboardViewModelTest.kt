@@ -421,4 +421,30 @@ class DashboardViewModelTest {
         assertEquals(1, saved.sealedCount) // 1 sealed reserve pack added
         assertEquals(6, saved.totalDisplayCount) // Total 6 cans/tins (2 3-packs)
     }
+
+    @Test
+    fun `consumeItem when no overlay active updates item in repository without opening overlay`() = runTest {
+        val multipackItem = PantryItem(
+            id = "corn_1",
+            name = "Sweetcorn in water 3x200g",
+            shelfNumber = 4,
+            zoneIndex = 2,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            activeCount = 3,
+            sealedCount = 0
+        )
+
+        val slot = slot<PantryItem>()
+        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
+
+        assertNull(viewModel.uiState.value.activeOverlay)
+
+        viewModel.consumeItem(multipackItem, 1)
+
+        val updated = slot.captured
+        assertEquals(2, updated.activeCount)
+        assertEquals(2, updated.totalDisplayCount)
+        assertNull(viewModel.uiState.value.activeOverlay) // Overlay remains null
+    }
 }

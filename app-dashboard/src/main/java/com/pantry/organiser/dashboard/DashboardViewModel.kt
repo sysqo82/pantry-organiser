@@ -198,6 +198,21 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    private fun updateOverlayIfShowing(updatedItem: PantryItem?) {
+        _uiState.update { state ->
+            val current = state.activeOverlay
+            if (current is OverlayContext.ItemDetail) {
+                if (updatedItem == null || current.item.id == updatedItem.id) {
+                    state.copy(activeOverlay = updatedItem?.let { OverlayContext.ItemDetail(it) })
+                } else {
+                    state
+                }
+            } else {
+                state
+            }
+        }
+    }
+
     fun consumeItem(item: PantryItem, amount: Int = 1) {
         viewModelScope.launch {
             if (item.unitsPerPack > 1) {
@@ -205,7 +220,7 @@ class DashboardViewModel @Inject constructor(
                 val remainingUnits = totalUnits - amount
                 if (remainingUnits <= 0) {
                     pantryRepository.deleteItem(item)
-                    _uiState.update { it.copy(activeOverlay = null) }
+                    updateOverlayIfShowing(null)
                 } else {
                     val newActiveCount = if (remainingUnits % item.unitsPerPack != 0) remainingUnits % item.unitsPerPack else item.unitsPerPack
                     val newSealedCount = (remainingUnits - newActiveCount) / item.unitsPerPack
@@ -215,7 +230,7 @@ class DashboardViewModel @Inject constructor(
                         updatedAt = System.currentTimeMillis()
                     )
                     pantryRepository.updateItem(updated)
-                    _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+                    updateOverlayIfShowing(updated)
                 }
             } else if (item.trackingType == TrackingType.BULK_LEVEL) {
                 if (item.activeFill == FillLevel.EMPTY) {
@@ -226,10 +241,10 @@ class DashboardViewModel @Inject constructor(
                             updatedAt = System.currentTimeMillis()
                         )
                         pantryRepository.updateItem(updated)
-                        _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+                        updateOverlayIfShowing(updated)
                     } else {
                         pantryRepository.deleteItem(item)
-                        _uiState.update { it.copy(activeOverlay = null) }
+                        updateOverlayIfShowing(null)
                     }
                 } else {
                     val prevFill = item.activeFill.prev()
@@ -240,25 +255,25 @@ class DashboardViewModel @Inject constructor(
                             updatedAt = System.currentTimeMillis()
                         )
                         pantryRepository.updateItem(updated)
-                        _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+                        updateOverlayIfShowing(updated)
                     } else {
                         val updated = item.copy(
                             activeFill = prevFill,
                             updatedAt = System.currentTimeMillis()
                         )
                         pantryRepository.updateItem(updated)
-                        _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+                        updateOverlayIfShowing(updated)
                     }
                 }
             } else if (item.trackingType == TrackingType.DISCRETE_COUNT) {
                 val newCount = item.sealedCount - amount
                 if (newCount <= 0) {
                     pantryRepository.deleteItem(item)
-                    _uiState.update { it.copy(activeOverlay = null) }
+                    updateOverlayIfShowing(null)
                 } else {
                     val updated = item.copy(sealedCount = newCount, updatedAt = System.currentTimeMillis())
                     pantryRepository.updateItem(updated)
-                    _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+                    updateOverlayIfShowing(updated)
                 }
             }
         }
@@ -282,7 +297,7 @@ class DashboardViewModel @Inject constructor(
                 item.copy(sealedCount = item.sealedCount + 1, updatedAt = System.currentTimeMillis())
             }
             pantryRepository.updateItem(updated)
-            _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+            updateOverlayIfShowing(updated)
         }
     }
 
@@ -298,7 +313,7 @@ class DashboardViewModel @Inject constructor(
                 item.copy(activeFill = fillLevel, updatedAt = System.currentTimeMillis())
             }
             pantryRepository.updateItem(updated)
-            _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updated)) }
+            updateOverlayIfShowing(updated)
         }
     }
 
