@@ -28,9 +28,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.pantry.organiser.data.FillLevel
-import com.pantry.organiser.data.PantryItem
-import com.pantry.organiser.data.TrackingType
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.ui.components.ProductThumbnail
 
 @Composable
@@ -196,7 +196,7 @@ fun ItemDetailActionModal(
                             }
                         }
 
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(16.dp))
 
                         // Inventory Card (No Stepper)
                         Surface(
@@ -206,7 +206,7 @@ fun ItemDetailActionModal(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.padding(14.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -227,14 +227,22 @@ fun ItemDetailActionModal(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.ExtraBold
                                     )
+                                    if (item.unitsPerPack > 1) {
+                                        Text(
+                                            text = "${item.sealedCount} sealed ${if (item.sealedCount == 1) "pack" else "packs"} (${item.activeCount} active in pack)",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        Spacer(Modifier.height(32.dp))
+                        Spacer(Modifier.height(16.dp))
 
                         // Action Buttons
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             if (item.trackingType == TrackingType.BULK_LEVEL) {
                                 // Bulk Consumption: Fill Level Selector
                                 Surface(
@@ -244,9 +252,9 @@ fun ItemDetailActionModal(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(
-                                        modifier = Modifier.padding(16.dp),
+                                        modifier = Modifier.padding(12.dp),
                                         horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Text(
                                             text = "How much is left?",
@@ -259,7 +267,7 @@ fun ItemDetailActionModal(
 
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             FillLevel.entries.forEach { level ->
@@ -268,7 +276,7 @@ fun ItemDetailActionModal(
                                                     onClick = { selectedLevel = level },
                                                     selected = isSelected,
                                                     modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp),
+                                                    shape = RoundedCornerShape(10.dp),
                                                     color = if (isSelected) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surface,
                                                     contentColor = if (isSelected) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurfaceVariant,
                                                     border = androidx.compose.foundation.BorderStroke(
@@ -278,7 +286,7 @@ fun ItemDetailActionModal(
                                                 ) {
                                                     Text(
                                                         text = level.label,
-                                                        modifier = Modifier.padding(vertical = 10.dp),
+                                                        modifier = Modifier.padding(vertical = 8.dp),
                                                         textAlign = TextAlign.Center,
                                                         style = MaterialTheme.typography.labelMedium,
                                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
@@ -289,7 +297,7 @@ fun ItemDetailActionModal(
 
                                         Button(
                                             onClick = { onUpdateLevel(selectedLevel) },
-                                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                                            modifier = Modifier.fillMaxWidth().height(42.dp),
                                             shape = RoundedCornerShape(12.dp),
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MaterialTheme.colorScheme.tertiary,
@@ -303,9 +311,10 @@ fun ItemDetailActionModal(
                             } else {
                                 // Primary Action 1: Consume (Tertiary Color to match Home Screen)
                                 val consumeLabel = item.getDisplayUnitLabel(isPlural = false)
+                                val remainingCount = maxOf(0, item.totalDisplayCount - 1)
                                 ActionButton(
                                     text = "− Quick Consume 1 $consumeLabel",
-                                    subtext = "(${item.totalDisplayCount - 1} left)",
+                                    subtext = "($remainingCount left)",
                                     containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                                     contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                                     onClick = { onConsume(1) }
@@ -336,7 +345,7 @@ fun ItemDetailActionModal(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(vertical = 12.dp),
+                                    modifier = Modifier.padding(vertical = 10.dp),
                                     textAlign = TextAlign.Center
                                 )
                             }

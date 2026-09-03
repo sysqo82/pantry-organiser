@@ -1,5 +1,8 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryConstants
+import com.pantry.organiser.core.model.PantryItem
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -11,15 +14,13 @@ data class PocketBasePantryItem(
     val brand: String? = null,
     @SerialName("package_quantity") val packageQuantity: String? = null,
     @SerialName("image_url") val imageUrl: String? = null,
-    // localImageUri REMOVED to prevent cross-device path leakage
+    @SerialName("local_image_uri") val localImageUri: String? = null,
     val image: String? = null, // PocketBase file field
     @SerialName("shelf_number") val shelfNumber: Int = 1,
     @SerialName("zone_index") val zoneIndex: Int = 1,
-    @SerialName("tracking_type") val trackingType: String = "DISCRETE_COUNT", // "DISCRETE_COUNT" | "BULK_LEVEL"
     @SerialName("sealed_count") val sealedCount: Int = 0,
-    @SerialName("units_per_pack") val unitsPerPack: Int? = null,
-    @SerialName("active_count") val activeCount: Int? = null,
-    @SerialName("active_fill") val activeFill: String = "FULL", // enum names
+    @SerialName("active_fill") val activeFill: String = "FULL",
+    @SerialName("is_assigned") val isAssigned: Boolean = false,
 
     @SerialName("created") val created: String? = null,
     @SerialName("updated") val updated: String? = null
@@ -27,11 +28,11 @@ data class PocketBasePantryItem(
 
 @Serializable
 data class PocketBaseListResponse<T>(
-    val page: Int,
-    val perPage: Int,
-    val totalItems: Int,
-    val totalPages: Int,
-    val items: List<T>
+    val page: Int = 1,
+    val perPage: Int = 30,
+    val totalItems: Int = 0,
+    val totalPages: Int = 0,
+    val items: List<T> = emptyList()
 )
 
 @Serializable
@@ -39,8 +40,6 @@ data class RealtimeEvent(
     val action: String, // "create", "update", "delete"
     val record: PocketBasePantryItem
 )
-
-const val POCKETBASE_URL = "https://pantry.lockpc.co.uk"
 
 private fun parsePocketBaseDate(dateStr: String?): Long {
     if (dateStr.isNullOrBlank()) return 0L
@@ -78,21 +77,24 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     // We trust the local trackingType. Classification logic moved to ViewModel.
     android.util.Log.d("PocketBaseModels", "Syncing $id to PB: shelf=$pbShelf, zone=$pbZone, trackingType=$trackingType")
     
+    val validUrl = (apiImageUrl ?: imageUrl)?.takeIf { 
+        it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) 
+    }
+
     return PocketBasePantryItem(
-        id = id.takeIf { it.isNotEmpty() && !it.startsWith("local_") },
-        name = name,
-        barcode = barcode,
-        brand = brand,
-        packageQuantity = packageQuantity,
-        imageUrl = apiImageUrl, // ONLY use apiImageUrl for the remote image_url field
-        image = if (imageUrl == null) "" else null, // Explicitly clear PB file field if imageUrl is null (Restore case)
+        id = null,
+        name = name.ifBlank { "Unknown Product" },
+        barcode = barcode?.takeIf { it.isNotBlank() },
+        brand = brand?.takeIf { it.isNotBlank() },
+        packageQuantity = packageQuantity?.takeIf { it.isNotBlank() },
+        imageUrl = validUrl,
+        image = if (imageUrl == null) "" else null,
+        localImageUri = localImageUri?.takeIf { it.isNotBlank() },
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
-        trackingType = trackingType.name,
         sealedCount = sealedCount,
-        unitsPerPack = unitsPerPack,
-        activeCount = activeCount,
-        activeFill = activeFill.name
+        activeFill = activeFill.name,
+        isAssigned = isAssigned
     )
 }
 
@@ -102,58 +104,38 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     
     // The "image" field in PB holds the custom upload
     val customImageUrl = if (!image.isNullOrEmpty() && id != null) {
-        val base = "$POCKETBASE_URL/api/files/pantry_items/$id/$image"
+        val base = "${PantryConstants.POCKETBASE_URL}/api/files/pantry_items/$id/$image"
         if (updatedAtTime > 0) "$base?v=$updatedAtTime" else base
     } else null
 
     // The "image_url" field in PB holds the original OFF link
-    val originalApiUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+    val originalApiUrl = imageUrl?.ifBlank { null }?.takeIf { it != "N/A" }
 
     val mappedShelf = shelfNumber.coerceIn(1, 4)
     val mappedZone = zoneIndex.coerceIn(1, 3)
     
-    val mappedTrackingType = try { 
-        val serverType = TrackingType.valueOf(trackingType)
-        // SANITY FIX: If server says DISCRETE but our engine rules say BULK (like for flour), 
-        // we override to prevent the infinite fix loop.
-        val inferredType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
-        if (serverType == TrackingType.DISCRETE_COUNT && inferredType == TrackingType.BULK_LEVEL) {
-            TrackingType.BULK_LEVEL
-        } else {
-            serverType
-        }
-    } catch (e: Exception) { 
-        PantryItem.determineTrackingType(name, quantity = packageQuantity)
-    }
-
-    // Heuristic Fallback: If server field is missing, infer from name/quantity.
-    // This handles cases where the server schema hasn't been updated.
+    val mappedTrackingType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
     val inferredUnits = PantryItem.inferUnitsPerPack(name, packageQuantity)
-    val finalUnitsPerPack = unitsPerPack ?: inferredUnits
-    
-    // If active_count is missing from server, assume a full pack based on units_per_pack
-    val finalActiveCount = activeCount ?: finalUnitsPerPack
+    val rawFill = activeFill.ifBlank { "FULL" }
     
     return PantryItem(
-        id = id ?: "",
-        name = name,
-        barcode = barcode,
-        brand = brand,
-        packageQuantity = packageQuantity,
+        id = id.takeIf { !it.isNullOrBlank() } ?: ("local_" + java.util.UUID.randomUUID().toString()),
+        name = name.ifBlank { "Unknown Product" },
+        barcode = barcode?.ifBlank { null },
+        brand = brand?.ifBlank { null },
+        packageQuantity = packageQuantity?.ifBlank { null },
         imageUrl = customImageUrl, // Custom Photo from PB
         apiImageUrl = originalApiUrl, // Original Photo from API
-        localImageUri = null, 
+        localImageUri = localImageUri?.ifBlank { null }, 
         shelfNumber = mappedShelf,
         zoneIndex = mappedZone,
         trackingType = mappedTrackingType,
         sealedCount = sealedCount,
-        unitsPerPack = finalUnitsPerPack,
-        activeCount = finalActiveCount,
-        activeFill = try { FillLevel.valueOf(activeFill) } catch (e: Exception) { FillLevel.FULL },
+        unitsPerPack = inferredUnits,
+        activeCount = inferredUnits,
+        activeFill = try { FillLevel.valueOf(rawFill) } catch (e: Exception) { FillLevel.FULL },
+        isAssigned = isAssigned,
         createdAt = createdAtTime,
         updatedAt = updatedAtTime
     )
 }
-
-
-

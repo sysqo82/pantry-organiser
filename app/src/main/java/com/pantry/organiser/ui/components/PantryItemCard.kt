@@ -21,9 +21,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.pantry.organiser.data.FillLevel
-import com.pantry.organiser.data.PantryItem
-import com.pantry.organiser.data.TrackingType
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -159,7 +159,7 @@ fun PantryItemCard(
                         ) {
                             Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
-                            Text(if (item.unitsPerPack > 1) "${item.sealedCount} left" else "Consume", style = MaterialTheme.typography.labelSmall)
+                            Text(if (item.unitsPerPack > 1) "${item.totalDisplayCount} left" else "Consume", style = MaterialTheme.typography.labelSmall)
                         }
 
                     }

@@ -2,6 +2,7 @@ package com.pantry.organiser.ui
 
 import app.cash.turbine.test
 import com.pantry.organiser.data.*
+import com.pantry.organiser.core.model.*
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -426,7 +427,7 @@ class PantryViewModelTest {
 
     @Test
     fun `consumeUnits for multipack correctly calculates remaining units`() = runTest {
-        // Scenario: 6 units available (previously 2 packs of 3). Consume 2.
+        // Scenario: 6 units available (1 sealed 3-pack + 3 active). Consume 2.
         val item = PantryItem(
             id = "multipack1",
             name = "Sweetcorn",
@@ -434,27 +435,49 @@ class PantryViewModelTest {
             zoneIndex = 1,
             trackingType = TrackingType.DISCRETE_COUNT,
             unitsPerPack = 3,
-            sealedCount = 6,
-            activeCount = 1
+            sealedCount = 1,
+            activeCount = 3
         )
         
         viewModel.consumeUnits(item, 2)
         
         coVerify { 
             repository.updateItem(match { 
-                // 6 - 2 = 4 units left.
-                it.id == "multipack1" && it.sealedCount == 4
+                // 6 - 2 = 4 units left (1 sealed pack + 1 active).
+                it.id == "multipack1" && it.sealedCount == 1 && it.activeCount == 1
             }) 
         }
         assertFalse(viewModel.uiState.value.isScannerVisible)
         assertNull(viewModel.uiState.value.pendingConsumeItem)
     }
 
-
+    @Test
+    fun `consumeUnits for multipack auto rolls stock level when counter reaches 0`() = runTest {
+        // Scenario: 4 units available (1 sealed 3-pack + 1 active). Consume 1 (counter reaches 0).
+        val item = PantryItem(
+            id = "multipack1",
+            name = "Sweetcorn",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            sealedCount = 1,
+            activeCount = 1
+        )
+        
+        viewModel.consumeUnits(item, 1)
+        
+        coVerify { 
+            repository.updateItem(match { 
+                // Stock level removed (-1 sealed count -> 0), active counter updated to 3 cans available.
+                it.id == "multipack1" && it.sealedCount == 0 && it.activeCount == 3
+            }) 
+        }
+    }
 
     @Test
     fun `consumeUnits for multipack when item is deleted at zero`() = runTest {
-        // Scenario: 3 units left. Consume 3.
+        // Scenario: 3 units left (0 sealed packs, 3 active). Consume 3.
         val item = PantryItem(
             id = "multipack2",
             name = "Sweetcorn",
@@ -462,8 +485,8 @@ class PantryViewModelTest {
             zoneIndex = 1,
             trackingType = TrackingType.DISCRETE_COUNT,
             unitsPerPack = 3,
-            sealedCount = 3,
-            activeCount = 1
+            sealedCount = 0,
+            activeCount = 3
         )
         
         viewModel.consumeUnits(item, 3)

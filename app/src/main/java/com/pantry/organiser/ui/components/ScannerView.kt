@@ -31,9 +31,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pantry.organiser.data.OffProduct
-import com.pantry.organiser.data.PantryItem
-import com.pantry.organiser.data.TrackingType
-import com.pantry.organiser.data.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.ui.ScannerMode
 import kotlinx.coroutines.delay
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType

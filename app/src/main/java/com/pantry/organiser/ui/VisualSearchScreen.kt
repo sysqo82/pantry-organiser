@@ -22,7 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.pantry.organiser.data.PantryItem
+import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.ui.components.ProductThumbnail
 import kotlinx.coroutines.delay
 

@@ -10,13 +10,13 @@ A system for tracking and managing home food inventory using a visual grid and b
 The high-level container for all items. Current implementation focus is a single physical pantry, with multi-location support (e.g. Fridge, Freezer) reserved for future development.
 
 
-**Primary Device**:
-The dedicated tablet mounted in the pantry, serving as the only device with write permissions and the primary source of truth.
-_Avoid_: Tablet
+**Dashboard Device (Tablet)**:
+The dedicated tablet mounted in the pantry, serving as the curator and the only device with the Room database (Single Source of Truth). It consumes updates via SSE and removes all camera-related hardware code.
+_Avoid_: Tablet, Primary Device
 
-**Secondary Device**:
-Mobile phones used in a read-only mode for inventory lookups.
-_Avoid_: Phone, remote device
+**Ingestion Device (Mobile)**:
+Mobile phones used strictly for data-entry. Features continuous barcode scanning, batch processing, and dispatching payloads to the Dashboard.
+_Avoid_: Phone, remote device, Secondary Device
 
 
 **Shelf**:
@@ -62,18 +62,16 @@ The specific pack currently being consumed. For Staples, it has a Fill Level.
 **Opening**:
 The automatic transition of a Unit from reserve stock to being available for immediate consumption when active stock reaches zero.
 
-### Inventory State
+### Data & Sync
 
-**Low Stock**:
-A state where an item's remaining quantity triggers a restock reminder.
-- For **Staples**: Active pack is at "Low" Fill Level AND there are zero sealed units in reserve.
-- For **Units**: Total consumable units is less than or equal to one full "Pack" size (e.g., 1 tin left of a 3-pack).
+**Batch Payload**:
+A collection of items scanned by an Ingestion Device in a single session. Dispatched to the cloud (PocketBase) to be consumed by the Dashboard.
 
-**Shopping List**:
-A collection of items marked for replenishment. Items are added **automatically** when they reach a Low Stock state or are deleted (consumed to zero).
+**Sync Queue**:
+The temporary state on the Dashboard representing items received from an Ingestion Device that are awaiting shelf assignment and quantity confirmation.
 
-**Barcode Multi-Match**:
-A scenario where one barcode resolves to multiple pantry items (e.g. same product in two locations). Resolved via **Location Priority** (favoring the currently viewed shelf/zone).
+**Pantry ID**:
+A unique identifier for a specific pantry household, used to route messages between Ingestion and Dashboard devices.
 
 
 

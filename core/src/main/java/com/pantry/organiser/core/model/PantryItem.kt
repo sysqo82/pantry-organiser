@@ -1,4 +1,4 @@
-package com.pantry.organiser.data
+package com.pantry.organiser.core.model
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -46,46 +46,41 @@ enum class FillLevel(val percentage: Int, val label: String) {
 )
 @Serializable
 data class PantryItem(
-    @PrimaryKey val id: String, // PocketBase ID
+    @PrimaryKey val id: String,
     @ColumnInfo(name = "name") val name: String,
     @ColumnInfo(name = "barcode") val barcode: String? = null,
     @ColumnInfo(name = "brand") val brand: String? = null,
     @ColumnInfo(name = "package_quantity") val packageQuantity: String? = null,
-    @ColumnInfo(name = "image_url") val imageUrl: String? = null, // Custom/File URL
-    @ColumnInfo(name = "api_image_url") val apiImageUrl: String? = null, // Original OFF URL
+    @ColumnInfo(name = "image_url") val imageUrl: String? = null,
+    @ColumnInfo(name = "api_image_url") val apiImageUrl: String? = null,
     @ColumnInfo(name = "local_image_uri") val localImageUri: String? = null,
-    @ColumnInfo(name = "shelf_number") val shelfNumber: Int, // 1 to 4 (S1 to S4)
-    @ColumnInfo(name = "zone_index") val zoneIndex: Int,     // 1: Left, 2: Mid, 3: Right
+    @ColumnInfo(name = "shelf_number") val shelfNumber: Int,
+    @ColumnInfo(name = "zone_index") val zoneIndex: Int,
     @ColumnInfo(name = "tracking_type") val trackingType: TrackingType = TrackingType.BULK_LEVEL,
     @ColumnInfo(name = "sealed_count") val sealedCount: Int = 0,
     @ColumnInfo(name = "units_per_pack") val unitsPerPack: Int = 1,
     @ColumnInfo(name = "active_count") val activeCount: Int = 1,
     @ColumnInfo(name = "active_fill") val activeFill: FillLevel = FillLevel.FULL,
+    @ColumnInfo(name = "is_assigned") val isAssigned: Boolean = false,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
 ) {
-    // Derived properties for UI consistency - strictly enforcing 1-based indexing
     val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 4)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
 
-    /**
-     * Unified inventory count for display across all screens.
-     * Discrete: returns sealedCount (which represents total units).
-     * Bulk: returns sealedCount + 1 (if active pack is not EMPTY).
-     */
     val totalDisplayCount: Int get() = when (trackingType) {
-        TrackingType.DISCRETE_COUNT -> sealedCount
+        TrackingType.DISCRETE_COUNT -> {
+            if (unitsPerPack > 1) {
+                (sealedCount * unitsPerPack) + activeCount
+            } else {
+                sealedCount
+            }
+        }
         TrackingType.BULK_LEVEL -> if (activeFill != FillLevel.EMPTY) sealedCount + 1 else sealedCount
     }
 
-    /**
-     * True if there is any inventory available (sealed or active).
-     */
     val hasStock: Boolean get() = totalDisplayCount > 0
 
-    /**
-     * Returns the appropriate unit label for the current display count.
-     */
     fun getDisplayUnitLabel(isPlural: Boolean = totalDisplayCount != 1): String {
         return when {
             trackingType == TrackingType.BULK_LEVEL -> if (isPlural) "Portions" else "Portion"
@@ -95,80 +90,64 @@ data class PantryItem(
     }
 
     companion object {
-        /**
-         * Heuristic to extract bundle size (e.g. "4 x 100g", "3x80g", "4x 200ml", "4 Pack", "Pack of 6")
-         */
         fun inferUnitsPerPack(name: String?, quantity: String?): Int {
             val searchString = "${name ?: ""} ${quantity ?: ""}".lowercase()
-            
-            // 1. Multiplier patterns: "4 x 100g", "3x80g", "4x 200ml", "3 * 100g"
             val multiplierRegex = """(\d+)\s*[x×*]\s*\d+""".toRegex()
             multiplierRegex.find(searchString)?.let {
                 val val1 = it.groupValues[1].toIntOrNull() ?: 1
                 if (val1 in 2..48) return val1
             }
-            
-            // 2. "Pack of" patterns: "Pack of 4", "Pack of 6"
             val packOfRegex = """pack of (\d+)""".toRegex()
-            packOfRegex.find(searchString)?.let {
-                return it.groupValues[1].toIntOrNull() ?: 1
-            }
+            packOfRegex.find(searchString)?.let { return it.groupValues[1].toIntOrNull() ?: 1 }
 
-            // 3. Number before "Pack" patterns: "4 pack", "6 pack", "4-pack"
             val numberPackRegex = """(\d+)\s*-?pack\b""".toRegex()
-            numberPackRegex.find(searchString)?.let {
-                return it.groupValues[1].toIntOrNull() ?: 1
-            }
+            numberPackRegex.find(searchString)?.let { return it.groupValues[1].toIntOrNull() ?: 1 }
 
-            // 4. Compact "pk" patterns: "4pk", "6pk"
             val pkRegex = """(\d+)\s*pk\b""".toRegex()
-            pkRegex.find(searchString)?.let {
-                return it.groupValues[1].toIntOrNull() ?: 1
-            }
+            pkRegex.find(searchString)?.let { return it.groupValues[1].toIntOrNull() ?: 1 }
 
-            // 5. Tins/Cans patterns: "3 tins", "4 cans"
             val containersRegex = """(\d+)\s*(tins|cans|jars|bottles|pots)\b""".toRegex()
-            containersRegex.find(searchString)?.let {
-                return it.groupValues[1].toIntOrNull() ?: 1
-            }
-            
-            // 6. Loose multiplier at end: "Sweetcorn 3" or "Yogurt 4" (dangerous but user requested robustness)
-            // Only if it's a small number at the end of a string
+            containersRegex.find(searchString)?.let { return it.groupValues[1].toIntOrNull() ?: 1 }
+
             val endNumberRegex = """\b(\d{1,2})$""".toRegex()
             endNumberRegex.find(searchString.trim())?.let {
                 val val1 = it.groupValues[1].toIntOrNull() ?: 1
                 if (val1 in 2..12) return val1
             }
-            
+
             return 1
         }
 
-        /**
-         * Centralized logic to determine if an item should use BULK_LEVEL (weight-based) 
-         * or DISCRETE_COUNT (unit-based) tracking.
-         */
         fun determineTrackingType(
             name: String,
             categories: List<String>? = null,
-            quantity: String? = null
+            quantity: String? = null,
+            unitsPerPack: Int = inferUnitsPerPack(name, quantity)
         ): TrackingType {
-            val strictBulkKeywords = listOf(
-                "flour", "sugar", "rice", "pasta", "cooking oil", "olive oil", 
-                "vegetable oil", "sunflower oil", "cereal", "oats", "lentils", 
-                "baking powder"
-            )
-            
-            val forceDiscreteKeywords = listOf(
-                "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
-                "vinegar", "dressing", "can", "tin", "jar", "bottle", "spray"
-            )
+            if (unitsPerPack > 1) {
+                return TrackingType.DISCRETE_COUNT
+            }
 
             val categoriesCombined = categories?.joinToString(" ")?.lowercase() ?: ""
             val quantityLower = quantity?.lowercase() ?: ""
             val nameLower = name.lowercase()
 
-            // 0. Explicit Discrete Keywords (Highest Priority for containers/liquids that aren't bulk oils)
-            // Use word boundaries to prevent matching "tin" in "margheritine"
+            val stapleRegex = Regex(
+                "\\b(flour|sugar|rice|pasta|pastas|spaghetti|bucatini|penne|fusilli|farfalle|macaroni|rigatoni|linguine|tagliatelle|fettuccine|lasagne|lasagna|orzo|gnocchi|cannelloni|tortellini|ravioli|vermicelli|rotini|cavatappi|conchiglie|pappardelle|noodles?|oats|oatmeal|porridge|couscous|quinoa|lentils|bulgur|polenta|semolina|barley)\\b"
+            )
+            val isDryStaple = stapleRegex.containsMatchIn(nameLower) || stapleRegex.containsMatchIn(categoriesCombined)
+            val isContainerOrSauce = nameLower.contains(Regex("\\b(can|tin|jar|bottle|sauce|spray)\\b"))
+
+            if (isDryStaple && !isContainerOrSauce) {
+                return TrackingType.BULK_LEVEL
+            }
+
+            val forceDiscreteKeywords = listOf(
+                "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
+                "vinegar", "dressing", "can", "tin", "jar", "bottle", "spray",
+                "beans", "soup", "tuna", "sweetcorn", "corn", "tomatoes", "multipack", "tins", "cans", "bottles", "jars"
+            )
+
             if (forceDiscreteKeywords.any { keyword ->
                 val regex = Regex("\\b${Regex.escape(keyword)}\\b")
                 categoriesCombined.contains(regex) || 
@@ -178,17 +157,19 @@ data class PantryItem(
                 return TrackingType.DISCRETE_COUNT
             }
 
-            // 1. Strict Bulk Keywords check (Including standalone "salt")
+            val strictBulkKeywords = listOf(
+                "cooking oil", "olive oil", "vegetable oil", "sunflower oil", "cereal",
+                "baking powder", "baking soda", "yeast", "salt", "spice", "spices", "seasoning"
+            )
+
             if (strictBulkKeywords.any { keyword ->
                 val regex = Regex("\\b${Regex.escape(keyword)}\\b")
                 categoriesCombined.contains(regex) || nameLower.contains(regex)
-            } || nameLower.contains(Regex("\\bsalt\\b"))) {
+            }) {
                 return TrackingType.BULK_LEVEL
             }
 
-            // 3. Size/Unit Heuristics Fallback
             if (quantityLower.isNotEmpty()) {
-                // Check for large quantities (>= 1kg or >= 1L)
                 val hasLargeUnit = quantityLower.contains("kg") || 
                                  quantityLower.contains(" l ") || 
                                  quantityLower.contains("liter") ||
@@ -196,7 +177,6 @@ data class PantryItem(
                 
                 if (hasLargeUnit) return TrackingType.BULK_LEVEL
                 
-                // Try to extract number for grams/ml
                 val regex = """(\d+)\s*(g|ml)""".toRegex()
                 val match = regex.find(quantityLower)
                 if (match != null) {
@@ -205,14 +185,10 @@ data class PantryItem(
                 }
             }
 
-            // 4. Safe Default
             return TrackingType.DISCRETE_COUNT
         }
-
-
     }
 }
-
 
 class PantryTypeConverters {
     @TypeConverter fun fromTrackingType(type: TrackingType): String = type.name

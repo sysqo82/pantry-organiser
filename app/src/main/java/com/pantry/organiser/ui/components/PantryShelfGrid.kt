@@ -20,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.testTag
-import com.pantry.organiser.data.PantryItem
+import com.pantry.organiser.core.model.PantryItem
 
 @Composable
 fun PantryShelfGrid(

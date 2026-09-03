@@ -3,6 +3,7 @@ package com.pantry.organiser.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.data.*
+import com.pantry.organiser.core.model.*
 import com.pantry.organiser.ui.components.getCellLabel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -84,12 +85,11 @@ class PantryViewModel(
                 android.util.Log.d("PantryVM", "Sanity Fix: Correcting unitsPerPack for ${item.name} to $correctUnitsPerPack")
                 updated = updated.copy(
                     unitsPerPack = correctUnitsPerPack,
-                    // If it was a legacy single unit but it's actually a multipack, upgrade the count
-                    sealedCount = if (updated.sealedCount <= 1) correctUnitsPerPack else updated.sealedCount
+                    activeCount = if (updated.activeCount == 0) correctUnitsPerPack else updated.activeCount
                 )
             }
 
-            // 3. Active Pack Auto-Roll (Fix for "1 Portion - Empty")
+            // 3. Active Pack Auto-Roll for Staples (BULK_LEVEL)
             if (updated.trackingType == TrackingType.BULK_LEVEL && 
                 updated.activeFill == FillLevel.EMPTY && 
                 updated.sealedCount > 0) {
@@ -97,6 +97,26 @@ class PantryViewModel(
                 updated = updated.copy(
                     sealedCount = updated.sealedCount - 1,
                     activeFill = FillLevel.FULL,
+                    updatedAt = System.currentTimeMillis()
+                )
+            }
+
+            // 4. Multipack Auto-Roll check: if activeCount is 0 but sealedCount > 0
+            if (updated.unitsPerPack > 1 && updated.activeCount == 0 && updated.sealedCount > 0) {
+                android.util.Log.d("PantryVM", "Sanity Fix: Opening sealed multipack for ${item.name}")
+                updated = updated.copy(
+                    sealedCount = updated.sealedCount - 1,
+                    activeCount = updated.unitsPerPack,
+                    updatedAt = System.currentTimeMillis()
+                )
+            }
+
+            // 5. Legacy Multipack Over-inflation Fix (e.g. sealedCount set to unitsPerPack on creation)
+            if (updated.unitsPerPack > 1 && updated.sealedCount == updated.unitsPerPack && updated.activeCount == updated.unitsPerPack) {
+                android.util.Log.d("PantryVM", "Sanity Fix: Correcting legacy over-inflated sealedCount for ${item.name}")
+                updated = updated.copy(
+                    sealedCount = 0,
+                    activeCount = updated.unitsPerPack,
                     updatedAt = System.currentTimeMillis()
                 )
             }
@@ -160,9 +180,9 @@ class PantryViewModel(
     fun consumePortion(item: PantryItem) {
         if (_uiState.value.isReadOnly) return
         
-        // Multipack logic: Show selection overlay instead of immediate consumption
+        // Multipack logic: Consume 1 unit directly (which decrements active count and rolls over stock when active reaches 0)
         if (item.unitsPerPack > 1) {
-            _uiState.update { it.copy(pendingConsumeItem = item) }
+            consumeUnits(item, 1)
             return
         }
 
@@ -181,7 +201,7 @@ class PantryViewModel(
                     _uiState.update { it.copy(userNotification = "Removed ${item.name} (Last unit consumed)") }
                 }
             } else {
-                // Staple/Bulk logic: remains same for now (fill levels)
+                // Staple/Bulk logic
                 var updatedItem = item.copy(updatedAt = System.currentTimeMillis())
                 
                 if (item.activeFill == FillLevel.EMPTY) {
@@ -223,59 +243,95 @@ class PantryViewModel(
     fun consumeUnits(item: PantryItem, unitsToConsume: Int) {
         if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
-            // Auto-expand legacy 1-count multipack to full pack size before deduction
-            val currentUnits = if (item.unitsPerPack > 1 && item.sealedCount == 1) {
-                item.unitsPerPack
+            if (item.unitsPerPack > 1) {
+                val totalUnits = (item.sealedCount * item.unitsPerPack) + item.activeCount
+                val remainingUnits = totalUnits - unitsToConsume
+
+                android.util.Log.d("PantryVM", "Consuming $unitsToConsume of ${item.name}. Total: $totalUnits, Remaining: $remainingUnits")
+
+                if (remainingUnits <= 0) {
+                    android.util.Log.d("PantryVM", "Item finished, deleting: ${item.name}")
+                    repository.deleteItem(item)
+                    _uiState.update { it.copy(
+                        userNotification = "Consumed $unitsToConsume units of ${item.name}. All finished!",
+                        pendingConsumeItem = null,
+                        isScannerVisible = false
+                    ) }
+                } else {
+                    val newActiveCount = if (remainingUnits % item.unitsPerPack != 0) remainingUnits % item.unitsPerPack else item.unitsPerPack
+                    val newSealedCount = (remainingUnits - newActiveCount) / item.unitsPerPack
+                    val wasRolledOver = item.activeCount <= unitsToConsume && item.sealedCount > 0
+
+                    val updatedItem = item.copy(
+                        sealedCount = newSealedCount,
+                        activeCount = newActiveCount,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    repository.updateItem(updatedItem)
+
+                    val notification = if (wasRolledOver) {
+                        "Opened a sealed pack of ${item.name} (${newActiveCount} ${item.getDisplayUnitLabel()} available now)"
+                    } else {
+                        "Consumed $unitsToConsume units of ${item.name}. $remainingUnits left."
+                    }
+
+                    _uiState.update { it.copy(
+                        userNotification = notification,
+                        pendingConsumeItem = null,
+                        isScannerVisible = false
+                    ) }
+                }
             } else {
-                item.sealedCount
-            }
+                val currentUnits = item.sealedCount
+                val remainingUnits = currentUnits - unitsToConsume
 
-            val remainingUnits = currentUnits - unitsToConsume
-            
-            android.util.Log.d("PantryVM", "Consuming $unitsToConsume of ${item.name}. Total: $currentUnits, Remaining: $remainingUnits")
-
-            if (remainingUnits <= 0) {
-                android.util.Log.d("PantryVM", "Item finished, deleting: ${item.name}")
-                repository.deleteItem(item)
-                _uiState.update { it.copy(
-                    userNotification = "Consumed $unitsToConsume units of ${item.name}. All finished!",
-                    pendingConsumeItem = null,
-                    isScannerVisible = false
-                ) }
-
-            } else {
-                val updatedItem = item.copy(
-                    sealedCount = remainingUnits,
-                    updatedAt = System.currentTimeMillis()
-                )
-                repository.updateItem(updatedItem)
-                _uiState.update { it.copy(
-                    userNotification = "Consumed $unitsToConsume units of ${item.name}. $remainingUnits left.",
-                    pendingConsumeItem = null,
-                    isScannerVisible = false
-                ) }
+                if (remainingUnits <= 0) {
+                    repository.deleteItem(item)
+                    _uiState.update { it.copy(
+                        userNotification = "Consumed $unitsToConsume units of ${item.name}. All finished!",
+                        pendingConsumeItem = null,
+                        isScannerVisible = false
+                    ) }
+                } else {
+                    val updatedItem = item.copy(
+                        sealedCount = remainingUnits,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    repository.updateItem(updatedItem)
+                    _uiState.update { it.copy(
+                        userNotification = "Consumed $unitsToConsume units of ${item.name}. $remainingUnits left.",
+                        pendingConsumeItem = null,
+                        isScannerVisible = false
+                    ) }
+                }
             }
         }
     }
 
-
-
-
-
     fun addSealedUnit(item: PantryItem) {
         if (_uiState.value.isReadOnly) return
         viewModelScope.launch {
-            if (item.trackingType == TrackingType.BULK_LEVEL && item.activeFill == FillLevel.EMPTY) {
-                // If it was empty, the "new" unit becomes the active one
+            if (item.unitsPerPack > 1) {
+                val updatedItem = if (item.activeCount == 0) {
+                    item.copy(
+                        activeCount = item.unitsPerPack,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                } else {
+                    item.copy(
+                        sealedCount = item.sealedCount + 1,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                }
+                repository.updateItem(updatedItem)
+            } else if (item.trackingType == TrackingType.BULK_LEVEL && item.activeFill == FillLevel.EMPTY) {
                 repository.updateItem(item.copy(
                     activeFill = FillLevel.FULL,
                     updatedAt = System.currentTimeMillis()
                 ))
             } else {
-                // Otherwise increment the reserve stock
-                val increment = if (item.trackingType == TrackingType.DISCRETE_COUNT) item.unitsPerPack else 1
                 repository.updateItem(item.copy(
-                    sealedCount = item.sealedCount + increment,
+                    sealedCount = item.sealedCount + 1,
                     updatedAt = System.currentTimeMillis()
                 ))
             }

@@ -1,5 +1,8 @@
 package com.pantry.organiser.data
 
+import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -81,12 +84,12 @@ class PantryRepositoryTest {
     }
 
     @Test
-    fun `toPocketBase excludes local IDs`() {
+    fun `toPocketBase excludes IDs from JSON payload`() {
         val localItem = PantryItem(id = "local_123", name = "Test", shelfNumber = 1, zoneIndex = 1)
         val remoteItem = PantryItem(id = "remote_123", name = "Test", shelfNumber = 1, zoneIndex = 1)
         
         assert(localItem.toPocketBase().id == null)
-        assert(remoteItem.toPocketBase().id == "remote_123")
+        assert(remoteItem.toPocketBase().id == null)
     }
 
     @Test
@@ -94,13 +97,11 @@ class PantryRepositoryTest {
         val invalidPbItem = PocketBasePantryItem(
             id = "123",
             name = "Test",
-            trackingType = "INVALID",
-            activeFill = ""
+            activeFill = "INVALID"
         )
         
         val localItem = invalidPbItem.toLocal()
         
-        assert(localItem.trackingType == TrackingType.DISCRETE_COUNT)
         assert(localItem.activeFill == FillLevel.FULL)
     }
 }
