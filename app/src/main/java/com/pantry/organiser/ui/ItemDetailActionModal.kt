@@ -227,14 +227,6 @@ fun ItemDetailActionModal(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.ExtraBold
                                     )
-                                    if (item.unitsPerPack > 1) {
-                                        Text(
-                                            text = "${item.sealedCount} sealed ${if (item.sealedCount == 1) "pack" else "packs"} (${item.activeCount} active in pack)",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
                                 }
                             }
                         }

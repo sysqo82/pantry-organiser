@@ -111,8 +111,8 @@ class PantryViewModel(
                 )
             }
 
-            // 5. Legacy Multipack Over-inflation Fix (e.g. sealedCount set to unitsPerPack on creation)
-            if (updated.unitsPerPack > 1 && updated.sealedCount == updated.unitsPerPack && updated.activeCount == updated.unitsPerPack) {
+            // 5. Legacy Multipack Over-inflation Fix (e.g. sealedCount set to 1 or unitsPerPack on unassigned creation)
+            if (updated.unitsPerPack > 1 && (!updated.isAssigned || updated.sealedCount == updated.unitsPerPack) && updated.sealedCount > 0) {
                 android.util.Log.d("PantryVM", "Sanity Fix: Correcting legacy over-inflated sealedCount for ${item.name}")
                 updated = updated.copy(
                     sealedCount = 0,
@@ -554,8 +554,8 @@ class PantryViewModel(
                         barcode = trimmedBarcode,
                         trackingType = trackingType,
                         unitsPerPack = unitsPerPack,
-                        // Fix: Initialize discrete items with at least 1 pack (unitsPerPack units)
-                        sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 0,
+                        activeCount = if (trackingType == TrackingType.DISCRETE_COUNT) unitsPerPack else 1,
+                        sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) (if (unitsPerPack > 1) 0 else 1) else 0,
                         activeFill = if (trackingType == TrackingType.BULK_LEVEL) FillLevel.FULL else FillLevel.EMPTY
                     )
                     _uiState.update { it.copy(isLoading = false, pendingNewItem = tempItem) }
@@ -767,9 +767,9 @@ class PantryViewModel(
                     barcode = trimmedBarcode,
                     trackingType = trackingType,
                     unitsPerPack = inferredUnits,
-                    activeCount = 1,
+                    activeCount = if (trackingType == TrackingType.DISCRETE_COUNT) inferredUnits else 1,
                     activeFill = FillLevel.FULL,
-                    sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) inferredUnits else 0
+                    sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) (if (inferredUnits > 1) 0 else 1) else 0
                 )
                 repository.addItem(newItem)
             }
