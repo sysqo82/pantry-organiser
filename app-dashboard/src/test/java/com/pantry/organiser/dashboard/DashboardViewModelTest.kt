@@ -321,4 +321,104 @@ class DashboardViewModelTest {
         assertEquals(FillLevel.FULL, updated.activeFill)
         assertEquals(0, updated.sealedCount)
     }
+
+    @Test
+    fun `saveEnrichedItem on unassigned multipack sets 0 sealed reserve packs giving 3 total units`() = runTest {
+        val unassignedItem = PantryItem(
+            id = "3fuvis3959ghsr2",
+            name = "Sweetcorn in water",
+            barcode = "5063445794342",
+            brand = "Tesco",
+            packageQuantity = "3 x 200 gr",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            activeCount = 3,
+            sealedCount = 0,
+            isAssigned = false
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "sq_1",
+            itemId = "3fuvis3959ghsr2",
+            barcode = "5063445794342",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Sweetcorn in water",
+            brand = "Tesco",
+            quantity = "3 x 200 gr"
+        )
+
+        val slot = slot<PantryItem>()
+        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
+
+        viewModel.saveEnrichedItem(
+            syncItem = syncItem,
+            existingItem = unassignedItem,
+            shelf = 3,
+            zone = 2,
+            quantityToAdd = 1,
+            fillLevel = FillLevel.FULL
+        )
+
+        val saved = slot.captured
+        assertEquals("3fuvis3959ghsr2", saved.id)
+        assertTrue(saved.isAssigned)
+        assertEquals(3, saved.shelfNumber)
+        assertEquals(2, saved.zoneIndex)
+        assertEquals(3, saved.unitsPerPack)
+        assertEquals(3, saved.activeCount)
+        assertEquals(0, saved.sealedCount) // 0 sealed reserve packs for 1 multipack
+        assertEquals(3, saved.totalDisplayCount) // Total 3 cans/tins
+    }
+
+    @Test
+    fun `saveEnrichedItem on already assigned multipack adds a sealed reserve pack`() = runTest {
+        val assignedItem = PantryItem(
+            id = "3fuvis3959ghsr2",
+            name = "Sweetcorn in water",
+            barcode = "5063445794342",
+            brand = "Tesco",
+            packageQuantity = "3 x 200 gr",
+            shelfNumber = 3,
+            zoneIndex = 2,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 3,
+            activeCount = 3,
+            sealedCount = 0,
+            isAssigned = true
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "sq_2",
+            itemId = "3fuvis3959ghsr2",
+            barcode = "5063445794342",
+            scannedAt = 2000L,
+            batchId = "batch2",
+            productName = "Sweetcorn in water",
+            brand = "Tesco",
+            quantity = "3 x 200 gr"
+        )
+
+        val slot = slot<PantryItem>()
+        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
+
+        viewModel.saveEnrichedItem(
+            syncItem = syncItem,
+            existingItem = assignedItem,
+            shelf = 3,
+            zone = 2,
+            quantityToAdd = 1,
+            fillLevel = FillLevel.FULL
+        )
+
+        val saved = slot.captured
+        assertEquals("3fuvis3959ghsr2", saved.id)
+        assertTrue(saved.isAssigned)
+        assertEquals(3, saved.unitsPerPack)
+        assertEquals(3, saved.activeCount)
+        assertEquals(1, saved.sealedCount) // 1 sealed reserve pack added
+        assertEquals(6, saved.totalDisplayCount) // Total 6 cans/tins (2 3-packs)
+    }
 }

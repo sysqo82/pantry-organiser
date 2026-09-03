@@ -133,42 +133,12 @@ fun DashboardLayout(
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Inventory, 1: Sync Queue
 
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        // Hero Statistics Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text("TOTAL STOCK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Bold)
-                    Text("${pantryItems.sumOf { it.totalDisplayCount }} Items", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                }
-            }
-
-            Surface(
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text("PENDING SCANS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
-                    Text("${pendingItems.size} Scans", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                }
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
         val displayedItems = remember(pantryItems) { pantryItems.filter { it.isAssigned && it.hasStock } }
 
         // Segmented Control Tabs
         PrimaryTabRow(selectedTabIndex = selectedTab) {
             Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Stock Inventory (${displayedItems.size})", fontWeight = FontWeight.Bold) })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("Sync Queue (${pendingItems.size})", fontWeight = FontWeight.Bold) })
+            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("From Shopping List (${pendingItems.size})", fontWeight = FontWeight.Bold) })
         }
 
         Spacer(Modifier.height(12.dp))

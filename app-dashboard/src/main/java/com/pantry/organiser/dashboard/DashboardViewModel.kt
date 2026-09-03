@@ -13,6 +13,7 @@ import com.pantry.organiser.dashboard.ui.OverlayContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 data class DashboardUiState(
@@ -92,7 +93,7 @@ class DashboardViewModel @Inject constructor(
                 unitsPerPack = inferredUnits
             )
 
-            val itemToSave = if (existingItem != null) {
+            val itemToSave = if (existingItem != null && existingItem.isAssigned) {
                 val updatedType = determinedType
                 val updatedUnits = if (inferredUnits > 1) inferredUnits else existingItem.unitsPerPack
 
@@ -112,7 +113,8 @@ class DashboardViewModel @Inject constructor(
                 val effectiveQuantity = existingItem.packageQuantity?.takeIf { it.isNotBlank() } ?: syncItem.quantity
 
                 if (updatedType == TrackingType.DISCRETE_COUNT) {
-                    val addAmount = if (updatedUnits > 1) quantityToAdd else quantityToAdd
+                    val addAmount = quantityToAdd
+                    val newActive = if (existingItem.activeCount == 0) updatedUnits else existingItem.activeCount
                     existingItem.copy(
                         name = effectiveName,
                         brand = effectiveBrand,
@@ -123,6 +125,7 @@ class DashboardViewModel @Inject constructor(
                         zoneIndex = zone,
                         trackingType = updatedType,
                         unitsPerPack = updatedUnits,
+                        activeCount = newActive,
                         isAssigned = true, // Assigned!
                         sealedCount = existingItem.sealedCount + addAmount,
                         updatedAt = System.currentTimeMillis()
@@ -137,9 +140,9 @@ class DashboardViewModel @Inject constructor(
                         shelfNumber = shelf,
                         zoneIndex = zone,
                         trackingType = updatedType,
-                        activeFill = fillLevel,
+                        activeFill = if (existingItem.activeFill == FillLevel.EMPTY) fillLevel else existingItem.activeFill,
                         isAssigned = true, // Assigned!
-                        sealedCount = existingItem.sealedCount + maxOf(0, quantityToAdd - 1),
+                        sealedCount = existingItem.sealedCount + (if (existingItem.activeFill == FillLevel.EMPTY) maxOf(0, quantityToAdd - 1) else quantityToAdd),
                         updatedAt = System.currentTimeMillis()
                     )
                 }
@@ -150,14 +153,27 @@ class DashboardViewModel @Inject constructor(
                     maxOf(0, quantityToAdd - 1)
                 }
 
+                val targetId = existingItem?.id?.takeIf { it.isNotBlank() }
+                    ?: syncItem.itemId.takeIf { it.isNotBlank() }
+                    ?: ("local_" + UUID.randomUUID().toString())
+
+                val effectiveName = existingItem?.name?.takeIf { 
+                    it.isNotBlank() && it != "Unknown Product" && it != "Unnamed Item" && it != "Network Error" && it != "Enriching..." 
+                } ?: syncItem.productName ?: "Unknown Product"
+
+                val effectiveBrand = existingItem?.brand?.takeIf { it.isNotBlank() } ?: syncItem.brand
+                val effectiveImageUrl = existingItem?.imageUrl?.takeIf { it.isNotBlank() } ?: syncItem.imageUrl
+                val effectiveApiImageUrl = existingItem?.apiImageUrl?.takeIf { it.isNotBlank() } ?: syncItem.imageUrl
+                val effectiveQuantity = existingItem?.packageQuantity?.takeIf { it.isNotBlank() } ?: syncItem.quantity
+
                 PantryItem(
-                    id = if (syncItem.itemId.isNotBlank()) syncItem.itemId else "local_" + java.util.UUID.randomUUID().toString(),
-                    name = syncItem.productName ?: "Unknown Product",
-                    barcode = syncItem.barcode,
-                    brand = syncItem.brand,
-                    packageQuantity = syncItem.quantity,
-                    imageUrl = syncItem.imageUrl,
-                    apiImageUrl = syncItem.imageUrl,
+                    id = targetId,
+                    name = effectiveName,
+                    barcode = syncItem.barcode.ifBlank { existingItem?.barcode },
+                    brand = effectiveBrand,
+                    packageQuantity = effectiveQuantity,
+                    imageUrl = effectiveImageUrl,
+                    apiImageUrl = effectiveApiImageUrl,
                     shelfNumber = shelf,
                     zoneIndex = zone,
                     trackingType = determinedType,
@@ -166,7 +182,7 @@ class DashboardViewModel @Inject constructor(
                     activeCount = inferredUnits,
                     activeFill = fillLevel,
                     isAssigned = true, // Assigned!
-                    createdAt = System.currentTimeMillis(),
+                    createdAt = existingItem?.createdAt ?: System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
             }

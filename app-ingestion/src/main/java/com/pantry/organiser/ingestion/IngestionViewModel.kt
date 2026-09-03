@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.core.model.BatchPayload
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.ScannedItem
+import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.core.network.OpenFoodFactsRepository
 import com.pantry.organiser.core.network.SyncService
 import com.pantry.organiser.ingestion.scanner.ContinuousScanner
@@ -168,6 +169,12 @@ class IngestionViewModel @Inject constructor(
                     val inferredUnits = PantryItem.inferUnitsPerPack(productName, quantity)
                     val determinedType = PantryItem.determineTrackingType(productName, quantity = quantity, unitsPerPack = inferredUnits)
 
+                    val initialSealed = if (determinedType == TrackingType.DISCRETE_COUNT) {
+                        if (inferredUnits > 1) 0 else 1
+                    } else {
+                        0
+                    }
+
                     val newPantryItem = PantryItem(
                         id = "", // Empty ID so PocketBase generates record ID
                         name = productName,
@@ -179,7 +186,7 @@ class IngestionViewModel @Inject constructor(
                         shelfNumber = 1,
                         zoneIndex = 1,
                         trackingType = determinedType,
-                        sealedCount = 1,
+                        sealedCount = initialSealed,
                         unitsPerPack = inferredUnits,
                         activeCount = inferredUnits,
                         isAssigned = false, // Unassigned
