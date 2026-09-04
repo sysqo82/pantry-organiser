@@ -82,7 +82,7 @@ class SyncQueueRepository @Inject constructor(
                 items.add(
                     SyncQueueItem(
                         id = "${payload.pantryId}_${payload.timestamp}_${itemId}",
-                        itemId = if (pantryItem != null) itemId else "",
+                        itemId = itemId,
                         barcode = barcode,
                         scannedAt = payload.timestamp,
                         batchId = payload.pantryId + payload.timestamp,

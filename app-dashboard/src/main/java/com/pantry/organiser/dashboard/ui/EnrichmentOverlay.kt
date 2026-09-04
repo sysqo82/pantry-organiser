@@ -41,12 +41,6 @@ fun EnrichmentOverlay(
     var selectedCol by remember { mutableIntStateOf(existingItem?.zoneIndex?.let { it - 1 } ?: 1) }
 
     val isExisting = existingItem != null
-    val inferredUnits = com.pantry.organiser.core.model.PantryConstants.inferUnitsPerPack(syncItem.productName, syncItem.quantity)
-    val trackingType = existingItem?.trackingType ?: PantryItem.determineTrackingType(
-        name = syncItem.productName ?: "Unknown Product",
-        quantity = syncItem.quantity,
-        unitsPerPack = inferredUnits
-    )
 
     Box(
         modifier = Modifier
@@ -122,46 +116,29 @@ fun EnrichmentOverlay(
                     }
                 }
 
-                if (trackingType == TrackingType.DISCRETE_COUNT) {
-                    Text("How many did you buy?", style = MaterialTheme.typography.titleMedium)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth()
+                Text("How many did you buy?", style = MaterialTheme.typography.titleMedium)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    IconButton(
+                        onClick = { if (quantityToAdd > 1) quantityToAdd-- },
+                        modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                     ) {
-                        IconButton(
-                            onClick = { if (quantityToAdd > 1) quantityToAdd-- },
-                            modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
-                        ) {
-                            Icon(Icons.Default.Remove, contentDescription = "Decrease")
-                        }
-                        Text(
-                            text = quantityToAdd.toString(),
-                            style = MaterialTheme.typography.displayMedium,
-                            fontWeight = FontWeight.Black,
-                            modifier = Modifier.padding(horizontal = 32.dp)
-                        )
-                        IconButton(
-                            onClick = { quantityToAdd++ },
-                            modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Increase")
-                        }
+                        Icon(Icons.Default.Remove, contentDescription = "Decrease")
                     }
-                } else {
-                    Text("New stock level?", style = MaterialTheme.typography.titleMedium)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Text(
+                        text = quantityToAdd.toString(),
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 32.dp)
+                    )
+                    IconButton(
+                        onClick = { quantityToAdd++ },
+                        modifier = Modifier.size(56.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
                     ) {
-                        FillLevel.entries.forEach { level ->
-                            FilterChip(
-                                selected = selectedFillLevel == level,
-                                onClick = { selectedFillLevel = level },
-                                label = { Text(level.label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        Icon(Icons.Default.Add, contentDescription = "Increase")
                     }
                 }
 

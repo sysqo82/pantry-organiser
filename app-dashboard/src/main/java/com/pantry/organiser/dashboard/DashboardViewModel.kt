@@ -39,9 +39,30 @@ class DashboardViewModel @Inject constructor(
                 syncQueueRepository.getPendingItems(),
                 pantryRepository.allItems
             ) { pending, items ->
-                _uiState.update { it.copy(pendingItems = pending, pantryItems = items) }
+                val unassignedPantryItems = items.filter { !it.isAssigned && it.hasStock }
+                val pendingItemIds = pending.map { it.itemId }.toSet()
+                val pendingBarcodes = pending.map { it.barcode }.filter { it.isNotBlank() }.toSet()
 
-                if (pending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
+                val additionalPending = unassignedPantryItems.filter {
+                    it.id !in pendingItemIds && (it.barcode.isNullOrBlank() || it.barcode !in pendingBarcodes)
+                }.map { item ->
+                    SyncQueueItem(
+                        id = "unassigned_${item.id}",
+                        itemId = item.id,
+                        barcode = item.barcode ?: "",
+                        scannedAt = item.createdAt,
+                        batchId = "unassigned_batch",
+                        productName = item.name.ifBlank { "Unknown Product" },
+                        brand = item.brand ?: "",
+                        imageUrl = item.imageUrl ?: item.apiImageUrl ?: "",
+                        quantity = item.packageQuantity ?: ""
+                    )
+                }
+
+                val allPending = pending + additionalPending
+                _uiState.update { it.copy(pendingItems = allPending, pantryItems = items) }
+
+                if (allPending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
                     _uiState.update { it.copy(activeOverlay = null) }
                 }
             }.collect()

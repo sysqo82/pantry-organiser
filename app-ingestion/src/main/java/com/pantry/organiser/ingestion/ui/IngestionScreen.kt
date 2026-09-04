@@ -145,7 +145,7 @@ fun IngestionScreen(
                         ListItem(
                             headlineContent = { Text(item.name, fontWeight = FontWeight.Bold) },
                             supportingContent = { Text("${item.brand ?: ""} · Shelf ${item.shelfNumber}-${com.pantry.organiser.core.model.PantryConstants.getZoneLabel(item.zoneIndex)}") },
-                            trailingContent = { Text("Stock: ${item.totalDisplayCount} ${item.getDisplayUnitLabel()}") }
+                            trailingContent = { Text("Stock: ${item.formattedStockText}") }
                         )
                     }
                 }
