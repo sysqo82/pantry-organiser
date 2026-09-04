@@ -176,7 +176,7 @@ fun PantryItemCard(
                         shape = CircleShape
                     ) {
                         Text(
-                            text = "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
+                            text = item.formattedStockText,
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
@@ -227,7 +227,7 @@ fun SealedStockPill(
             
             Column(horizontalAlignment = Alignment.Start) {
                 Text(
-                    text = "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
+                    text = item.formattedStockText,
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold
                 )

@@ -69,10 +69,21 @@ class PocketBaseSyncService(
     override suspend fun fetchBatches(pantryId: String): List<BatchPayload> {
         val url = "$baseUrl/api/collections/batch_payloads/records"
         return try {
-            val response = client.get(url) {
-                parameter("filter", "pantryId='$pantryId'")
+            var response = client.get(url) {
+                parameter("filter", "pantryId=\"$pantryId\"")
                 parameter("sort", "-created")
-                parameter("perPage", 20)
+                parameter("perPage", 50)
+            }
+            if (!response.status.isSuccess()) {
+                Log.w("PocketBaseSync", "Fetch batches with filter failed (${response.status}), retrying without filter parameter...")
+                response = client.get(url) {
+                    parameter("sort", "-created")
+                    parameter("perPage", 50)
+                }
+            }
+            if (!response.status.isSuccess()) {
+                Log.w("PocketBaseSync", "Fetch batches with parameters failed (${response.status}), retrying plain GET...")
+                response = client.get(url)
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -80,7 +91,7 @@ class PocketBaseSyncService(
                 return emptyList()
             }
             val pbList: PocketBaseListResponse<BatchPayload> = response.body()
-            pbList.items
+            pbList.items.filter { it.pantryId == pantryId || it.pantryId.isBlank() || pantryId == "default-pantry" }
         } catch (e: Exception) {
             android.util.Log.e("PocketBaseSync", "Failed to fetch batches: ${e.message}", e)
             emptyList()

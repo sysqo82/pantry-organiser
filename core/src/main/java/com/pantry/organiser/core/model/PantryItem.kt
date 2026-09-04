@@ -81,6 +81,19 @@ data class PantryItem(
 
     val hasStock: Boolean get() = totalDisplayCount > 0
 
+    val formattedStockText: String get() = when (trackingType) {
+        TrackingType.BULK_LEVEL -> {
+            if (sealedCount > 0) {
+                "${activeFill.label} (+${sealedCount} Sealed)"
+            } else {
+                activeFill.label
+            }
+        }
+        TrackingType.DISCRETE_COUNT -> {
+            "$totalDisplayCount ${getDisplayUnitLabel()}"
+        }
+    }
+
     fun getDisplayUnitLabel(isPlural: Boolean = totalDisplayCount != 1): String {
         return when {
             trackingType == TrackingType.BULK_LEVEL -> if (isPlural) "Portions" else "Portion"

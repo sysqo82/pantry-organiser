@@ -219,5 +219,13 @@ class IngestionViewModelTest {
 
         assertEquals(2, viewModel.uiState.value.items.size)
         assertEquals("Soy Sauce", viewModel.uiState.value.items[1].name)
+
+        // Emit deleted item event (sealedCount = -1)
+        val deletedItem = PantryItem(id = "1", name = "Sweetcorn", barcode = "100", shelfNumber = 4, zoneIndex = 2, isAssigned = true, sealedCount = -1)
+        realtimeFlow.emit(deletedItem)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.items.size)
+        assertEquals("Soy Sauce", viewModel.uiState.value.items[0].name)
     }
 }

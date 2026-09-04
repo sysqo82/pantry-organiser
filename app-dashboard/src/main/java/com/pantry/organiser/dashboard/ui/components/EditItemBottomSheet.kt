@@ -111,6 +111,18 @@ fun EditItemBottomSheet(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                val itemBarcode = item.barcode
+                if (!itemBarcode.isNullOrBlank()) {
+                    OutlinedTextField(
+                        value = itemBarcode,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = false,
+                        label = { Text("Barcode") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
                 OutlinedTextField(
                     value = unitsPerPack,
                     onValueChange = { if (it.all { char -> char.isDigit() }) unitsPerPack = it },

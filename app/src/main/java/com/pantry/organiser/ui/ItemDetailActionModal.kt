@@ -176,6 +176,15 @@ fun ItemDetailActionModal(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     fontWeight = FontWeight.Medium
                                 )
+                                if (!item.barcode.isNullOrBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = "Barcode: ${item.barcode}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                                 
                                 if (item.unitsPerPack > 1) {
                                     Spacer(Modifier.height(8.dp))
@@ -218,11 +227,7 @@ fun ItemDetailActionModal(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = buildString {
-                                            append(item.totalDisplayCount)
-                                            append(" ")
-                                            append(item.getDisplayUnitLabel())
-                                        },
+                                        text = item.formattedStockText,
                                         style = MaterialTheme.typography.titleLarge,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.ExtraBold

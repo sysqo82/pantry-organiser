@@ -63,7 +63,7 @@ class IngestionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val currentPantryItems = syncService.fetchPantryItems(_uiState.value.pantryId)
-                val assignedItems = currentPantryItems.filter { it.isAssigned }
+                val assignedItems = currentPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }
                 _uiState.update { it.copy(items = assignedItems) }
             } catch (e: Exception) {
                 android.util.Log.e("IngestionVM", "Failed to fetch pantry items: ${e.message}")
@@ -77,7 +77,9 @@ class IngestionViewModel @Inject constructor(
                     val updatedList = state.items.toMutableList()
                     val existingIndex = updatedList.indexOfFirst { it.id == newItem.id || (it.barcode != null && it.barcode == newItem.barcode) }
 
-                    if (newItem.isAssigned) {
+                    val isAvailable = newItem.isAssigned && newItem.hasStock && newItem.sealedCount >= 0
+
+                    if (isAvailable) {
                         if (existingIndex >= 0) {
                             updatedList[existingIndex] = newItem
                         } else {
