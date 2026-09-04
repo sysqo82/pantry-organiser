@@ -36,7 +36,7 @@ fun ProductThumbnail(
     modifier: Modifier = Modifier,
     thumbnailSize: Dp? = 64.dp,
     updatedAt: Long = 0L,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Fit
 ) {
     val context = LocalContext.current
 

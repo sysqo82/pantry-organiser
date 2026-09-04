@@ -60,7 +60,12 @@ class DashboardViewModel @Inject constructor(
                 }
 
                 val allPending = pending + additionalPending
-                _uiState.update { it.copy(pendingItems = allPending, pantryItems = items) }
+                val sortedItems = items.sortedWith(
+                    compareByDescending<PantryItem> { it.shelfNumber }
+                        .thenBy { it.zoneIndex }
+                        .thenBy { it.name }
+                )
+                _uiState.update { it.copy(pendingItems = allPending, pantryItems = sortedItems) }
 
                 if (allPending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
                     _uiState.update { it.copy(activeOverlay = null) }

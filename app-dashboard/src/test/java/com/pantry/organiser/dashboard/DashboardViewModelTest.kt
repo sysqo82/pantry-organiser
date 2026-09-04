@@ -447,4 +447,23 @@ class DashboardViewModelTest {
         assertEquals(2, updated.totalDisplayCount)
         assertNull(viewModel.uiState.value.activeOverlay) // Overlay remains null
     }
+
+    @Test
+    fun `pantryItems in uiState are deterministically sorted by spatial location`() = runTest {
+        val itemS1 = PantryItem(id = "1", name = "Salt", shelfNumber = 1, zoneIndex = 1, isAssigned = true, activeCount = 1)
+        val itemS4R = PantryItem(id = "2", name = "Soy Sauce", shelfNumber = 4, zoneIndex = 3, isAssigned = true, activeCount = 2)
+        val itemS4M = PantryItem(id = "3", name = "Pizza Topper", shelfNumber = 4, zoneIndex = 2, isAssigned = true, activeCount = 1)
+
+        val unsortedItems = listOf(itemS1, itemS4R, itemS4M)
+        every { pantryRepository.allItems } returns flowOf(unsortedItems)
+
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository)
+        val stateItems = vm.uiState.value.pantryItems
+
+        // Expected spatial order: S4-M (shelf 4, zone 2), S4-R (shelf 4, zone 3), S1-L (shelf 1, zone 1)
+        assertEquals(3, stateItems.size)
+        assertEquals("Pizza Topper", stateItems[0].name)
+        assertEquals("Soy Sauce", stateItems[1].name)
+        assertEquals("Salt", stateItems[2].name)
+    }
 }

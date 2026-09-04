@@ -1,7 +1,10 @@
 package com.pantry.organiser.dashboard.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -11,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -71,14 +75,29 @@ fun EditItemBottomSheet(
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                ProductThumbnail(
-                    imageUrl = item.imageUrl,
-                    apiImageUrl = item.apiImageUrl,
-                    localImageUri = item.localImageUri,
-                    itemName = name,
-                    updatedAt = item.updatedAt,
-                    thumbnailSize = 120.dp
-                )
+                Box(
+                    modifier = Modifier
+                        .size(130.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .padding(8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ProductThumbnail(
+                        imageUrl = item.imageUrl,
+                        apiImageUrl = item.apiImageUrl,
+                        localImageUri = item.localImageUri,
+                        itemName = name,
+                        thumbnailSize = null,
+                        updatedAt = item.updatedAt,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
