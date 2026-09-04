@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -146,17 +147,30 @@ fun ItemDetailActionModal(
                     ) {
                         // Product Info Block
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            ProductThumbnail(
-                                imageUrl = item.imageUrl,
-                                apiImageUrl = item.apiImageUrl,
-                                localImageUri = item.localImageUri,
-                                itemName = item.name,
-                                thumbnailSize = 108.dp,
-                                updatedAt = item.updatedAt,
+                            Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                            )
+                                    .size(130.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                ProductThumbnail(
+                                    imageUrl = item.imageUrl,
+                                    apiImageUrl = item.apiImageUrl,
+                                    localImageUri = item.localImageUri,
+                                    itemName = item.name,
+                                    thumbnailSize = null,
+                                    updatedAt = item.updatedAt,
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
 
                             Spacer(Modifier.width(16.dp))
 
@@ -414,7 +428,8 @@ fun ShelfLocatorGrid(
                                 width = if (isTarget) 2.5.dp else 1.5.dp,
                                 color = if (isTarget) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                                 shape = RoundedCornerShape(10.dp)
-                            ),
+                            )
+                            .padding(if (isTarget) 4.dp else 0.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isTarget) {
@@ -425,6 +440,7 @@ fun ShelfLocatorGrid(
                                 itemName = item.name,
                                 thumbnailSize = null,
                                 updatedAt = item.updatedAt,
+                                contentScale = ContentScale.Fit,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {

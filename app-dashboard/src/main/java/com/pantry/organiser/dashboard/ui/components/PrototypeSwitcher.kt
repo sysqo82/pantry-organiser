@@ -22,13 +22,13 @@ import androidx.compose.ui.unit.sp
 fun PrototypeSwitcher(
     currentVariant: String,
     onVariantChange: (String) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val variants = listOf(
-        "A" to "Variant A (Split Grid & List)",
-        "B" to "Variant B (Spatial Shelf Matrix)",
-        "C" to "Variant C (Hero Analytics & Tabs)"
+    modifier: Modifier = Modifier,
+    variants: List<Pair<String, String>> = listOf(
+        "A" to "Variant A (Hero Full-Bleed Top Banner)",
+        "B" to "Variant B (Horizontal Media Split)",
+        "C" to "Variant C (Framed Fitted Canvas)"
     )
+) {
     val currentIndex = variants.indexOfFirst { it.first == currentVariant }.coerceAtLeast(0)
     val currentLabel = variants[currentIndex].second
 

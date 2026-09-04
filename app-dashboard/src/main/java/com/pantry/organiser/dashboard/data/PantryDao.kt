@@ -6,10 +6,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PantryDao {
-    @Query("SELECT * FROM pantry_items")
+    @Query("SELECT * FROM pantry_items ORDER BY shelf_number DESC, zone_index ASC, name ASC")
     fun getAllItems(): Flow<List<PantryItem>>
 
-    @Query("SELECT * FROM pantry_items")
+    @Query("SELECT * FROM pantry_items ORDER BY shelf_number DESC, zone_index ASC, name ASC")
     suspend fun getAllItemsOnce(): List<PantryItem>
 
     @Query("SELECT * FROM pantry_items WHERE barcode = :barcode LIMIT 1")
