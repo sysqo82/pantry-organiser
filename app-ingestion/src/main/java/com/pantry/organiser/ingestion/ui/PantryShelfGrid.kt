@@ -2,8 +2,8 @@ package com.pantry.organiser.ingestion.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,12 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 
@@ -41,7 +39,9 @@ fun PantryShelfGrid(
     ) {
         repeat(PantryConstants.TOTAL_SHELVES) { row ->
             Row(
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 repeat(PantryConstants.ZONES_PER_SHELF) { col ->
@@ -55,12 +55,10 @@ fun PantryShelfGrid(
                             highlightedItem.zoneIndex == zoneIndex
 
                     val itemsInCell = pantryItems.filter { it.shelfNumber == shelfNumber && it.zoneIndex == zoneIndex }
-                    val displayItem = highlightedItem.takeIf { isHighlighted } ?: itemsInCell.firstOrNull()
 
                     ShelfCell(
                         label = label,
                         isSelected = isSelected || isHighlighted,
-                        item = displayItem,
                         itemCount = itemsInCell.size,
                         onClick = { onCellClick(row, col) },
                         modifier = Modifier
@@ -77,64 +75,73 @@ fun PantryShelfGrid(
 fun ShelfCell(
     label: String,
     isSelected: Boolean,
-    item: PantryItem? = null,
     itemCount: Int = 0,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isShowingItem = item != null
+    val hasItems = itemCount > 0
 
     val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-        else MaterialTheme.colorScheme.surface,
-        animationSpec = tween(durationMillis = 600),
-        label = "CellPulse"
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surface
+        },
+        animationSpec = tween(durationMillis = 300),
+        label = "CellBg"
     )
 
     val borderColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-        animationSpec = tween(durationMillis = 600),
-        label = "BorderPulse"
+        targetValue = when {
+            isSelected -> MaterialTheme.colorScheme.primary
+            hasItems -> MaterialTheme.colorScheme.outline
+            else -> MaterialTheme.colorScheme.outlineVariant
+        },
+        animationSpec = tween(durationMillis = 300),
+        label = "CellBorder"
     )
 
-    Box(
+    Surface(
         modifier = modifier
             .fillMaxHeight()
-            .clip(RoundedCornerShape(4.dp))
-            .background(backgroundColor)
-            .border(
-                width = 2.dp,
-                color = borderColor,
-                shape = RoundedCornerShape(4.dp)
-            )
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+        color = backgroundColor,
+        border = BorderStroke(
+            width = if (isSelected) 2.dp else 1.dp,
+            color = borderColor
+        ),
+        shape = RoundedCornerShape(8.dp)
     ) {
-        if (isShowingItem && item != null) {
-            if (item.imageUrl != null) {
-                AsyncImage(
-                    model = item.imageUrl,
-                    contentDescription = item.name,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Text(item.name.take(1).uppercase(), style = MaterialTheme.typography.titleLarge)
-            }
-        }
-
-        // Label overlay
-        Surface(
-            color = if (isShowingItem) Color.Black.copy(alpha = 0.6f) else Color.Transparent,
-            shape = RoundedCornerShape(topEnd = 4.dp),
-            modifier = Modifier.align(Alignment.BottomStart)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp)
         ) {
             Text(
-                text = if (itemCount > 1) "$label ($itemCount)" else label,
-                color = if (isShowingItem) Color.White
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
                 else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                fontSize = if (isShowingItem) 10.sp else 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                fontSize = 12.sp,
+                maxLines = 1
+            )
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            Text(
+                text = if (hasItems) (if (itemCount == 1) "1 item" else "$itemCount items") else "Empty",
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                fontWeight = if (hasItems) FontWeight.SemiBold else FontWeight.Normal,
+                color = when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    hasItems -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                },
+                maxLines = 1
             )
         }
     }
