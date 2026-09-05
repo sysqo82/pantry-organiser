@@ -10,7 +10,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PantryItem::class, SyncQueueItem::class], version = 4, exportSchema = false)
+@Database(entities = [PantryItem::class, SyncQueueItem::class], version = 5, exportSchema = false)
 @TypeConverters(PantryTypeConverters::class)
 abstract class PantryDatabase : RoomDatabase() {
     abstract fun pantryDao(): PantryDao

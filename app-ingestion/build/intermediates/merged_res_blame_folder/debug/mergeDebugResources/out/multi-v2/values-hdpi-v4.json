@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.pantry.organiser.ingestion.app-ingestion-mergeDebugResources-2:/values-hdpi-v4/values-hdpi-v4.xml",
+            "map": [
+                {
+                    "source": "D:\\D backup\\My Documents\\projects\\pantry-organiser\\gradle\\caches\\8.9\\transforms\\cea69e7c5023e805a2e1ac05bb7b2464\\transformed\\appcompat-1.6.1\\res\\values-hdpi-v4\\values-hdpi-v4.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "6",
+                        "endColumns": "13",
+                        "endOffsets": "327"
+                    }
+                }
+            ]
+        }
+    ]
+}

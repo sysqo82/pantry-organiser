@@ -190,6 +190,8 @@ class DashboardViewModel @Inject constructor(
                 val effectiveBrand = existingItem?.brand?.takeIf { it.isNotBlank() } ?: syncItem.brand
                 val effectiveImageUrl = existingItem?.imageUrl?.takeIf { it.isNotBlank() } ?: syncItem.imageUrl
                 val effectiveApiImageUrl = existingItem?.apiImageUrl?.takeIf { it.isNotBlank() } ?: syncItem.imageUrl
+                val effectiveLocalImageUrl = existingItem?.localImageUrl
+                val effectiveLocalImageUri = existingItem?.localImageUri
                 val effectiveQuantity = existingItem?.packageQuantity?.takeIf { it.isNotBlank() } ?: syncItem.quantity
 
                 PantryItem(
@@ -200,6 +202,8 @@ class DashboardViewModel @Inject constructor(
                     packageQuantity = effectiveQuantity,
                     imageUrl = effectiveImageUrl,
                     apiImageUrl = effectiveApiImageUrl,
+                    localImageUrl = effectiveLocalImageUrl,
+                    localImageUri = effectiveLocalImageUri,
                     shelfNumber = shelf,
                     zoneIndex = zone,
                     trackingType = determinedType,
@@ -350,7 +354,7 @@ class DashboardViewModel @Inject constructor(
     fun saveEditedItem(updatedItem: PantryItem) {
         viewModelScope.launch {
             pantryRepository.updateItem(updatedItem)
-            _uiState.update { it.copy(activeOverlay = OverlayContext.ItemDetail(updatedItem)) }
+            _uiState.update { it.copy(activeOverlay = null) }
         }
     }
 

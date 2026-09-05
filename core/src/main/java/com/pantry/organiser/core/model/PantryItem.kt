@@ -53,6 +53,7 @@ data class PantryItem(
     @ColumnInfo(name = "package_quantity") val packageQuantity: String? = null,
     @ColumnInfo(name = "image_url") val imageUrl: String? = null,
     @ColumnInfo(name = "api_image_url") val apiImageUrl: String? = null,
+    @ColumnInfo(name = "local_image_url") val localImageUrl: String? = null,
     @ColumnInfo(name = "local_image_uri") val localImageUri: String? = null,
     @ColumnInfo(name = "shelf_number") val shelfNumber: Int,
     @ColumnInfo(name = "zone_index") val zoneIndex: Int,
@@ -65,6 +66,12 @@ data class PantryItem(
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at") val updatedAt: Long = System.currentTimeMillis()
 ) {
+    val activeImageSource: String?
+        get() = localImageUri?.takeIf { it.isNotBlank() }
+            ?: localImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+            ?: imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+            ?: apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+
     val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 4)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
 
@@ -83,10 +90,11 @@ data class PantryItem(
 
     val formattedStockText: String get() = when (trackingType) {
         TrackingType.BULK_LEVEL -> {
-            if (sealedCount > 0) {
-                "${activeFill.label} (+${sealedCount} Sealed)"
-            } else {
-                activeFill.label
+            val totalPacks = if (activeFill != FillLevel.EMPTY) sealedCount + 1 else sealedCount
+            when {
+                activeFill == FillLevel.FULL -> if (totalPacks == 1) "1 Sealed" else "$totalPacks Sealed"
+                sealedCount > 0 -> "${activeFill.label} (+ $sealedCount Sealed)"
+                else -> activeFill.label
             }
         }
         TrackingType.DISCRETE_COUNT -> {

@@ -61,6 +61,7 @@ fun PantryItemCard(
                 ProductThumbnail(
                     imageUrl = item.imageUrl,
                     apiImageUrl = item.apiImageUrl,
+                    localImageUrl = item.localImageUrl,
                     localImageUri = item.localImageUri,
                     itemName = item.name,
                     thumbnailSize = null,

@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.7.3">
+
+    <issue
+        id="InlinedApi"
+        severity="Warning"
+        message="Field requires API level 29 (current min is 24): `android.os.VibrationEffect#EFFECT_HEAVY_CLICK`"
+        category="Correctness"
+        priority="6"
+        summary="Using inlined constants on older versions"
+        explanation="This check scans through all the Android API field references in the application and flags certain constants, such as static final integers and Strings, which were introduced in later versions. These will actually be copied into the class files rather than being referenced, which means that the value is available even when running on older devices. In some cases that&apos;s fine, and in other cases it can result in a runtime crash or incorrect behavior. It depends on the context, so consider the code carefully and decide whether it&apos;s safe and can be suppressed or whether the code needs to be guarded.&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level."
+        errorLine1="        vibrate(VibrationEffect.EFFECT_HEAVY_CLICK, longArrayOf(0, 150))"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\AndroidFeedbackController.kt"
+            line="31"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        severity="Warning"
+        message="Field requires API level 29 (current min is 24): `android.os.VibrationEffect#EFFECT_DOUBLE_CLICK`"
+        category="Correctness"
+        priority="6"
+        summary="Using inlined constants on older versions"
+        explanation="This check scans through all the Android API field references in the application and flags certain constants, such as static final integers and Strings, which were introduced in later versions. These will actually be copied into the class files rather than being referenced, which means that the value is available even when running on older devices. In some cases that&apos;s fine, and in other cases it can result in a runtime crash or incorrect behavior. It depends on the context, so consider the code carefully and decide whether it&apos;s safe and can be suppressed or whether the code needs to be guarded.&#xA;&#xA;If you really want to use this API and don&apos;t need to support older devices just set the `minSdkVersion` in your `build.gradle` or `AndroidManifest.xml` files.&#xA;&#xA;If your code is **deliberately** accessing newer APIs, and you have ensured (e.g. with conditional execution) that this code will only ever be called on a supported platform, then you can annotate your class or method with the `@TargetApi` annotation specifying the local minimum SDK to apply, such as `@TargetApi(11)`, such that this check considers 11 rather than your manifest file&apos;s minimum SDK as the required API level."
+        errorLine1="        vibrate(VibrationEffect.EFFECT_DOUBLE_CLICK, longArrayOf(0, 100, 100, 100))"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\AndroidFeedbackController.kt"
+            line="36"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        severity="Warning"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        category="Correctness"
+        priority="6"
+        summary="Target SDK attribute is not targeting latest version"
+        explanation="When your application runs on a version of Android that is more recent than your `targetSdkVersion` specifies that it has been tested with, various compatibility modes kick in. This ensures that your application continues to work, but it may look out of place. For example, if the `targetSdkVersion` is less than 14, your app may get an option button in the UI.&#xA;&#xA;To fix this issue, set the `targetSdkVersion` to the highest available value. Then test your app to make sure everything works correctly. You may want to consult the compatibility notes to see what changes apply to each version you are adding support for: https://developer.android.com/reference/android/os/Build.VERSION_CODES.html as well as follow this guide:&#xA;https://developer.android.com/distribute/best-practices/develop/target-sdk.html"
+        url="https://developer.android.com/distribute/best-practices/develop/target-sdk.html"
+        urls="https://developer.android.com/distribute/best-practices/develop/target-sdk.html,https://developer.android.com/reference/android/os/Build.VERSION_CODES.html"
+        errorLine1="        targetSdk = 35"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\build.gradle.kts"
+            line="17"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="LockedOrientationActivity"
+        severity="Warning"
+        message="Expecting `android:screenOrientation=&quot;unspecified&quot;` or `&quot;fullSensor&quot;` for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices"
+        category="Correctness"
+        priority="4"
+        summary="Incompatible screenOrientation value"
+        explanation="The `&lt;activity>` element should not be locked to any orientation so that users can take advantage of the multi-window environments and larger screens available on Android. To fix the issue, consider declaring the corresponding activity element with `screenOrientation=&quot;unspecified&quot;`or `fullSensor` attribute."
+        url="https://developer.android.com/topic/arc/window-management"
+        urls="https://developer.android.com/topic/arc/window-management"
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        severity="Warning"
+        message="Modifier parameter should be the first optional parameter"
+        category="Correctness"
+        priority="3"
+        summary="Guidelines for Modifier parameters in a Composable function"
+        explanation="The first (or only) Modifier parameter in a Composable function should follow the following rules:&#xA;- Be named `modifier`&#xA;- Have a type of `Modifier`&#xA;- Either have no default value, or have a default value of `Modifier`&#xA;- If optional, be the first optional parameter in the parameter list"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\ui\PantryShelfGrid.kt"
+            line="33"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        severity="Warning"
+        message="Modifier parameter should be the first optional parameter"
+        category="Correctness"
+        priority="3"
+        summary="Guidelines for Modifier parameters in a Composable function"
+        explanation="The first (or only) Modifier parameter in a Composable function should follow the following rules:&#xA;- Be named `modifier`&#xA;- Have a type of `Modifier`&#xA;- Either have no default value, or have a default value of `Modifier`&#xA;- If optional, be the first optional parameter in the parameter list"
+        errorLine1="    modifier: Modifier = Modifier"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\ui\PantryShelfGrid.kt"
+            line="83"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        severity="Warning"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        category="Correctness"
+        priority="2"
+        summary="Using discouraged APIs"
+        explanation="Discouraged APIs are allowed and are not deprecated, but they may be unfit for common use (e.g. due to slow performance or subtle behavior)."
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml"
+            line="19"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="PermissionImpliesUnsupportedChromeOsHardware"
+        severity="Error"
+        message="Permission exists without corresponding hardware `&lt;uses-feature android:name=&quot;android.hardware.camera&quot; required=&quot;false&quot;>` tag"
+        category="Correctness:Chrome OS"
+        priority="3"
+        summary="Permission Implies Unsupported Chrome OS Hardware"
+        explanation="The `&lt;uses-permission>` element should not require a permission that implies an unsupported large screen hardware feature. Google Play assumes that certain hardware related permissions indicate that the underlying hardware features are required by default. To fix the issue, consider declaring the corresponding &lt;uses-feature> element with `required=&quot;false&quot;` attribute."
+        url="https://developer.android.com/topic/arc/manifest.html#implied-features"
+        urls="https://developer.android.com/topic/arc/manifest.html#implied-features"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.CAMERA&quot; />"
+        errorLine2="     ~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml"
+            line="5"
+            column="6"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_200` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_200&quot;>#FFBB86FC&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="3"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_500` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_500&quot;>#FF6200EE&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="4"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.purple_700` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;purple_700&quot;>#FF3700B3&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="5"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.teal_200` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;teal_200&quot;>#FF03DAC5&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="6"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.teal_700` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;teal_700&quot;>#FF018786&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="7"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.black` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;black&quot;>#FF000000&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="8"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.color.white` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;color name=&quot;white&quot;>#FFFFFFFF&lt;/color>"
+        errorLine2="           ~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml"
+            line="9"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.string.device_role` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="    &lt;string name=&quot;device_role&quot;>SECONDARY&lt;/string>"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\config.xml"
+            line="4"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        severity="Warning"
+        message="The resource `R.xml.file_paths` appears to be unused"
+        category="Performance"
+        priority="3"
+        summary="Unused resources"
+        explanation="Unused resources make applications larger and slow down builds.&#xA;&#xA;&#xA;The unused resource check can ignore tests. If you want to include resources that are only referenced from tests, consider packaging them in a test source set instead.&#xA;&#xA;You can include test sources in the unused resource check by setting the system property lint.unused-resources.include-tests =true, and to exclude them (usually for performance reasons), use lint.unused-resources.exclude-tests =true.&#xA;,"
+        errorLine1="&lt;paths>"
+        errorLine2="^">
+        <location
+            file="D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\xml\file_paths.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+</issues>

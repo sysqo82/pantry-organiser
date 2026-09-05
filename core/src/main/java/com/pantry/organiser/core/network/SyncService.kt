@@ -16,4 +16,5 @@ interface SyncService {
     suspend fun createPantryItem(item: PantryItem): PantryItem?
     suspend fun updatePantryItem(item: PantryItem): PantryItem?
     suspend fun deletePantryItem(itemId: String): Boolean
+    suspend fun uploadPantryItemImage(itemId: String, imageBytes: ByteArray, filename: String = "product.jpg"): PantryItem?
 }

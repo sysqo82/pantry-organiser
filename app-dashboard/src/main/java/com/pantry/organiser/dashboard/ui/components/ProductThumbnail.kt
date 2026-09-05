@@ -31,6 +31,7 @@ import coil.request.ImageRequest
 fun ProductThumbnail(
     imageUrl: String?,
     apiImageUrl: String? = null,
+    localImageUrl: String? = null,
     localImageUri: String? = null,
     itemName: String,
     modifier: Modifier = Modifier,
@@ -41,17 +42,18 @@ fun ProductThumbnail(
     val context = LocalContext.current
 
     val validLocalUri = localImageUri?.takeIf { it.isNotBlank() && it != "N/A" }
-    val validRemoteUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
-    val validApiUrl = apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+    val validLocalUrl = localImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
+    val validRemoteUrl = imageUrl?.takeIf { it.isNotBlank() && it != "N/A" && !it.contains("/api/files/") }
+    val validApiUrl = apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" && !it.contains("/api/files/") }
 
-    var imageSource by remember(validLocalUri, validRemoteUrl, validApiUrl) {
-        mutableStateOf(validLocalUri ?: validRemoteUrl ?: validApiUrl)
+    var imageSource by remember(validLocalUri, validLocalUrl, validRemoteUrl, validApiUrl) {
+        mutableStateOf(validLocalUri ?: validLocalUrl ?: validRemoteUrl ?: validApiUrl)
     }
 
     val failedUris = remember { mutableSetOf<String>() }
 
-    LaunchedEffect(validLocalUri, validRemoteUrl, validApiUrl, updatedAt) {
-        val bestSource = validLocalUri ?: validRemoteUrl ?: validApiUrl
+    LaunchedEffect(validLocalUri, validLocalUrl, validRemoteUrl, validApiUrl, updatedAt) {
+        val bestSource = validLocalUri ?: validLocalUrl ?: validRemoteUrl ?: validApiUrl
 
         if (updatedAt != 0L) {
             failedUris.clear()
@@ -89,6 +91,10 @@ fun ProductThumbnail(
 
                     when (imageSource) {
                         validLocalUri -> {
+                            val next = validLocalUrl ?: validRemoteUrl ?: validApiUrl
+                            imageSource = if (next != null && !failedUris.contains(next)) next else null
+                        }
+                        validLocalUrl -> {
                             val next = validRemoteUrl ?: validApiUrl
                             imageSource = if (next != null && !failedUris.contains(next)) next else null
                         }

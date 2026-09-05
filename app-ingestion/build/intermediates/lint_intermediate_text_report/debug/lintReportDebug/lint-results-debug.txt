@@ -1,0 +1,147 @@
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\AndroidFeedbackController.kt:31: Warning: Field requires API level 29 (current min is 24): android.os.VibrationEffect#EFFECT_HEAVY_CLICK [InlinedApi]
+        vibrate(VibrationEffect.EFFECT_HEAVY_CLICK, longArrayOf(0, 150))
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\AndroidFeedbackController.kt:36: Warning: Field requires API level 29 (current min is 24): android.os.VibrationEffect#EFFECT_DOUBLE_CLICK [InlinedApi]
+        vibrate(VibrationEffect.EFFECT_DOUBLE_CLICK, longArrayOf(0, 100, 100, 100))
+                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "InlinedApi":
+   This check scans through all the Android API field references in the
+   application and flags certain constants, such as static final integers and
+   Strings, which were introduced in later versions. These will actually be
+   copied into the class files rather than being referenced, which means that
+   the value is available even when running on older devices. In some cases
+   that's fine, and in other cases it can result in a runtime crash or
+   incorrect behavior. It depends on the context, so consider the code
+   carefully and decide whether it's safe and can be suppressed or whether the
+   code needs to be guarded.
+
+   If you really want to use this API and don't need to support older devices
+   just set the minSdkVersion in your build.gradle or AndroidManifest.xml
+   files.
+
+   If your code is deliberately accessing newer APIs, and you have ensured
+   (e.g. with conditional execution) that this code will only ever be called
+   on a supported platform, then you can annotate your class or method with
+   the @TargetApi annotation specifying the local minimum SDK to apply, such
+   as @TargetApi(11), such that this check considers 11 rather than your
+   manifest file's minimum SDK as the required API level.
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\build.gradle.kts:17: Warning: Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the android.os.Build.VERSION_CODES javadoc for details. [OldTargetApi]
+        targetSdk = 35
+        ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "OldTargetApi":
+   When your application runs on a version of Android that is more recent than
+   your targetSdkVersion specifies that it has been tested with, various
+   compatibility modes kick in. This ensures that your application continues
+   to work, but it may look out of place. For example, if the targetSdkVersion
+   is less than 14, your app may get an option button in the UI.
+
+   To fix this issue, set the targetSdkVersion to the highest available value.
+   Then test your app to make sure everything works correctly. You may want to
+   consult the compatibility notes to see what changes apply to each version
+   you are adding support for:
+   https://developer.android.com/reference/android/os/Build.VERSION_CODES.html
+   as well as follow this guide:
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.
+   html
+
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.html
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml:19: Warning: Expecting android:screenOrientation="unspecified" or "fullSensor" for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices [LockedOrientationActivity]
+            android:screenOrientation="portrait">
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "LockedOrientationActivity":
+   The <activity> element should not be locked to any orientation so that
+   users can take advantage of the multi-window environments and larger
+   screens available on Android. To fix the issue, consider declaring the
+   corresponding activity element with `screenOrientation="unspecified"`or
+   fullSensor attribute.
+
+   https://developer.android.com/topic/arc/window-management
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\ui\PantryShelfGrid.kt:33: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+    modifier: Modifier = Modifier
+    ~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\java\com\pantry\organiser\ingestion\ui\PantryShelfGrid.kt:83: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+    modifier: Modifier = Modifier
+    ~~~~~~~~
+
+   Explanation for issues of type "ModifierParameter":
+   The first (or only) Modifier parameter in a Composable function should
+   follow the following rules:
+   - Be named modifier
+   - Have a type of Modifier
+   - Either have no default value, or have a default value of Modifier
+   - If optional, be the first optional parameter in the parameter list
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml:19: Warning: Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed. [DiscouragedApi]
+            android:screenOrientation="portrait">
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "DiscouragedApi":
+   Discouraged APIs are allowed and are not deprecated, but they may be unfit
+   for common use (e.g. due to slow performance or subtle behavior).
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\AndroidManifest.xml:5: Error: Permission exists without corresponding hardware <uses-feature android:name="android.hardware.camera" required="false"> tag [PermissionImpliesUnsupportedChromeOsHardware]
+    <uses-permission android:name="android.permission.CAMERA" />
+     ~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "PermissionImpliesUnsupportedChromeOsHardware":
+   The <uses-permission> element should not require a permission that implies
+   an unsupported large screen hardware feature. Google Play assumes that
+   certain hardware related permissions indicate that the underlying hardware
+   features are required by default. To fix the issue, consider declaring the
+   corresponding <uses-feature> element with required="false" attribute.
+
+   https://developer.android.com/topic/arc/manifest.html#implied-features
+
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:3: Warning: The resource R.color.purple_200 appears to be unused [UnusedResources]
+    <color name="purple_200">#FFBB86FC</color>
+           ~~~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:4: Warning: The resource R.color.purple_500 appears to be unused [UnusedResources]
+    <color name="purple_500">#FF6200EE</color>
+           ~~~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:5: Warning: The resource R.color.purple_700 appears to be unused [UnusedResources]
+    <color name="purple_700">#FF3700B3</color>
+           ~~~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:6: Warning: The resource R.color.teal_200 appears to be unused [UnusedResources]
+    <color name="teal_200">#FF03DAC5</color>
+           ~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:7: Warning: The resource R.color.teal_700 appears to be unused [UnusedResources]
+    <color name="teal_700">#FF018786</color>
+           ~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:8: Warning: The resource R.color.black appears to be unused [UnusedResources]
+    <color name="black">#FF000000</color>
+           ~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\colors.xml:9: Warning: The resource R.color.white appears to be unused [UnusedResources]
+    <color name="white">#FFFFFFFF</color>
+           ~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\values\config.xml:4: Warning: The resource R.string.device_role appears to be unused [UnusedResources]
+    <string name="device_role">SECONDARY</string>
+            ~~~~~~~~~~~~~~~~~~
+D:\D backup\My Documents\projects\pantry-organiser\app-ingestion\src\main\res\xml\file_paths.xml:2: Warning: The resource R.xml.file_paths appears to be unused [UnusedResources]
+<paths>
+^
+
+   Explanation for issues of type "UnusedResources":
+   Unused resources make applications larger and slow down builds.
+
+
+   The unused resource check can ignore tests. If you want to include
+   resources that are only referenced from tests, consider packaging them in a
+   test source set instead.
+
+   You can include test sources in the unused resource check by setting the
+   system property lint.unused-resources.include-tests =true, and to exclude
+   them (usually for performance reasons), use
+   lint.unused-resources.exclude-tests =true.
+   ,
+
+1 errors, 16 warnings

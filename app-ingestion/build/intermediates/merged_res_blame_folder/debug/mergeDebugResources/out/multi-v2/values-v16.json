@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.pantry.organiser.ingestion.app-ingestion-mergeDebugResources-2:/values-v16/values-v16.xml",
+            "map": [
+                {
+                    "source": "D:\\D backup\\My Documents\\projects\\pantry-organiser\\gradle\\caches\\8.9\\transforms\\cea69e7c5023e805a2e1ac05bb7b2464\\transformed\\appcompat-1.6.1\\res\\values-v16\\values-v16.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "223"
+                    }
+                }
+            ]
+        }
+    ]
+}

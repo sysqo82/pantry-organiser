@@ -1,6 +1,9 @@
 package com.pantry.organiser.ingestion
 
+import android.content.Context
 import android.util.Log
+import androidx.camera.core.Preview
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.core.model.BatchPayload
@@ -11,11 +14,13 @@ import com.pantry.organiser.core.network.OpenFoodFactsRepository
 import com.pantry.organiser.core.network.SyncService
 import com.pantry.organiser.ingestion.scanner.ContinuousScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 enum class IngestionMode {
@@ -44,7 +49,7 @@ class IngestionViewModel @Inject constructor(
 
     val effects = feedbackController.effects
 
-    private var realtimeSyncJob: kotlinx.coroutines.Job? = null
+    private var realtimeSyncJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -57,7 +62,7 @@ class IngestionViewModel @Inject constructor(
     fun startRealtimeSync() {
         if (realtimeSyncJob?.isActive == true) return
         
-        android.util.Log.d("IngestionVM", "Starting realtime sync")
+        Log.d("IngestionVM", "Starting realtime sync")
         
         // Fetch initial stock inventory
         viewModelScope.launch {
@@ -66,7 +71,7 @@ class IngestionViewModel @Inject constructor(
                 val assignedItems = currentPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }
                 _uiState.update { it.copy(items = assignedItems) }
             } catch (e: Exception) {
-                android.util.Log.e("IngestionVM", "Failed to fetch pantry items: ${e.message}")
+                Log.e("IngestionVM", "Failed to fetch pantry items: ${e.message}")
             }
         }
 
@@ -97,9 +102,49 @@ class IngestionViewModel @Inject constructor(
     }
 
     fun stopRealtimeSync() {
-        android.util.Log.d("IngestionVM", "Stopping realtime sync (screen off / app stopped)")
+        Log.d("IngestionVM", "Stopping realtime sync (screen off / app stopped)")
         realtimeSyncJob?.cancel()
         realtimeSyncJob = null
+    }
+
+    fun uploadCustomItemPhoto(context: Context, item: PantryItem, imageBytes: ByteArray) {
+        viewModelScope.launch {
+            try {
+                val imagesDir = File(context.filesDir, "product_images").apply { mkdirs() }
+                val imageFile = File(imagesDir, "${item.id.ifBlank { System.currentTimeMillis().toString() }}.jpg")
+                imageFile.writeBytes(imageBytes)
+
+                val updatedLocal = item.copy(
+                    localImageUri = imageFile.absolutePath,
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                // Update local list state instantly
+                _uiState.update { state ->
+                    state.copy(items = state.items.map { if (it.id == item.id) updatedLocal else it })
+                }
+
+                // Upload image file to PocketBase
+                val uploadedItem = syncService.uploadPantryItemImage(
+                    itemId = item.id,
+                    imageBytes = imageBytes,
+                    filename = "${item.id}.jpg"
+                )
+
+                if (uploadedItem != null) {
+                    Log.d("IngestionVM", "Custom photo successfully uploaded to PocketBase for ${item.name}: ${uploadedItem.localImageUrl}")
+                    val finalItem = uploadedItem.copy(
+                        localImageUri = imageFile.absolutePath
+                    )
+                    syncService.updatePantryItem(finalItem)
+                    _uiState.update { state ->
+                        state.copy(items = state.items.map { if (it.id == item.id) finalItem else it })
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("IngestionVM", "Failed to upload custom item photo: ${e.message}", e)
+            }
+        }
     }
 
     private fun handleBarcode(barcode: String) {
@@ -147,7 +192,7 @@ class IngestionViewModel @Inject constructor(
                             quantity = ""
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("IngestionVM", "Failed to enrich barcode $barcode", e)
+                        Log.e("IngestionVM", "Failed to enrich barcode $barcode", e)
                         productName = "Network Error"
                         brand = ""
                         imageUrl = ""
@@ -242,7 +287,7 @@ class IngestionViewModel @Inject constructor(
         }
     }
 
-    fun startScanner(lifecycleOwner: androidx.lifecycle.LifecycleOwner, surfaceProvider: androidx.camera.core.Preview.SurfaceProvider) {
+    fun startScanner(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
         scanner.start(lifecycleOwner, surfaceProvider)
     }
 }

@@ -7,15 +7,20 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.utils.io.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
+import java.net.ConnectException
+import java.net.SocketException
+import java.net.UnknownHostException
 
 class PocketBaseSyncService(
     private val client: HttpClient,
@@ -38,14 +43,14 @@ class PocketBaseSyncService(
                     requestTimeoutMillis = 30000 // 30s for dispatch
                 }
             }
-            android.util.Log.d("PocketBaseSync", "Batch dispatched successfully. Status: ${response.status}")
+            Log.d("PocketBaseSync", "Batch dispatched successfully. Status: ${response.status}")
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (e: Exception) { "No error body" }
-                android.util.Log.e("PocketBaseSync", "Server error (${response.status}): $errorBody")
+                Log.e("PocketBaseSync", "Server error (${response.status}): $errorBody")
                 throw Exception("Server returned ${response.status}: $errorBody")
             }
         } catch (e: Exception) {
-            android.util.Log.e("PocketBaseSync", "Failed to dispatch batch to $url: ${e.message}")
+            Log.e("PocketBaseSync", "Failed to dispatch batch to $url: ${e.message}")
             throw e
         }
     }
@@ -57,12 +62,12 @@ class PocketBaseSyncService(
                 setBody(RealtimeSubscribeRequest(clientId, listOf(collection)))
             }
             if (response.status.isSuccess()) {
-                android.util.Log.d("PocketBaseSync", "Successfully subscribed to $collection")
+                Log.d("PocketBaseSync", "Successfully subscribed to $collection")
             } else {
-                android.util.Log.e("PocketBaseSync", "Failed to subscribe to $collection: ${response.status}")
+                Log.e("PocketBaseSync", "Failed to subscribe to $collection: ${response.status}")
             }
         } catch (e: Exception) {
-            android.util.Log.e("PocketBaseSync", "Exception during subscription to $collection: ${e.message}")
+            Log.e("PocketBaseSync", "Exception during subscription to $collection: ${e.message}")
         }
     }
 
@@ -87,13 +92,13 @@ class PocketBaseSyncService(
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
-                android.util.Log.e("PocketBaseSync", "Failed to fetch batches (${response.status}): $errorBody")
+                Log.e("PocketBaseSync", "Failed to fetch batches (${response.status}): $errorBody")
                 return emptyList()
             }
             val pbList: PocketBaseListResponse<BatchPayload> = response.body()
             pbList.items.filter { it.pantryId == pantryId || it.pantryId.isBlank() || pantryId == "default-pantry" }
         } catch (e: Exception) {
-            android.util.Log.e("PocketBaseSync", "Failed to fetch batches: ${e.message}", e)
+            Log.e("PocketBaseSync", "Failed to fetch batches: ${e.message}", e)
             emptyList()
         }
     }
@@ -105,7 +110,7 @@ class PocketBaseSyncService(
         while (currentCoroutineContext().isActive) {
             try {
                 val url = "$baseUrl/api/realtime"
-                android.util.Log.d("PocketBaseSync", "Connecting to realtime: $url for $pantryId")
+                Log.d("PocketBaseSync", "Connecting to realtime: $url for $pantryId")
                 client.prepareGet(url) {
                     timeout {
                         requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -114,14 +119,14 @@ class PocketBaseSyncService(
                     }
                 }.execute { response ->
                     retryDelay = 5000L
-                    android.util.Log.d("PocketBaseSync", "Realtime stream opened for $pantryId. Status: ${response.status}")
+                    Log.d("PocketBaseSync", "Realtime stream opened for $pantryId. Status: ${response.status}")
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
                         val line = try {
                             channel.readUTF8Line()
                         } catch (e: Exception) {
-                            if (e is kotlinx.coroutines.CancellationException) throw e
-                            android.util.Log.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}")
+                            if (e is CancellationException) throw e
+                            Log.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}")
                             null
                         } ?: break
 
@@ -133,7 +138,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            android.util.Log.d("PocketBaseSync", "Received clientId: $clientId. Subscribing...")
+                                            Log.d("PocketBaseSync", "Received clientId: $clientId. Subscribing...")
                                             coroutineScope {
                                                 launch { subscribe(clientId, "batch_payloads") }
                                             }
@@ -148,29 +153,29 @@ class PocketBaseSyncService(
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.w("PocketBaseSync", "Failed to parse realtime data from $pantryId: $data. Error: ${e.message}")
+                                    Log.w("PocketBaseSync", "Failed to parse realtime data from $pantryId: $data. Error: ${e.message}")
                                 }
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException || !currentCoroutineContext().isActive) throw e
-                val isNetworkDown = e is java.net.UnknownHostException || 
-                                    e is java.net.ConnectException || 
-                                    e is java.net.SocketException ||
-                                    e.cause is java.net.UnknownHostException
+                if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isNetworkDown = e is UnknownHostException ||
+                                    e is ConnectException ||
+                                    e is SocketException ||
+                                    e.cause is UnknownHostException
                 if (isNetworkDown) {
-                    android.util.Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
-                    android.util.Log.e("PocketBaseSync", "Connection error for $pantryId: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                    Log.e("PocketBaseSync", "Connection error for $pantryId: ${e.message}. Retrying in ${retryDelay / 1000}s...")
                 }
                 if (!currentCoroutineContext().isActive) break
                 delay(retryDelay)
                 retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
             } catch (t: Throwable) {
                 if (!currentCoroutineContext().isActive) throw t
-                android.util.Log.e("PocketBaseSync", "Unexpected fatal error in realtime observer for $pantryId", t)
+                Log.e("PocketBaseSync", "Unexpected fatal error in realtime observer for $pantryId", t)
                 if (!currentCoroutineContext().isActive) break
                 delay(10000)
             }
@@ -185,13 +190,13 @@ class PocketBaseSyncService(
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
-                android.util.Log.e("PocketBaseSync", "Failed to fetch pantry_items (${response.status}): $errorBody")
+                Log.e("PocketBaseSync", "Failed to fetch pantry_items (${response.status}): $errorBody")
                 throw Exception("HTTP ${response.status}: $errorBody")
             }
             val pbList: PocketBaseListResponse<PocketBasePantryItem> = response.body()
             pbList.items.map { it.toLocal() }
         } catch (e: Exception) {
-            android.util.Log.e("PocketBaseSync", "Failed to fetch pantry_items: ${e.message}", e)
+            Log.e("PocketBaseSync", "Failed to fetch pantry_items: ${e.message}", e)
             throw e
         }
     }
@@ -237,7 +242,7 @@ class PocketBaseSyncService(
                 }
             }
         }
-        android.util.Log.e("PocketBaseSync", "Failed all 3 attempts to create pantry_item: ${item.name}", lastException)
+        Log.e("PocketBaseSync", "Failed all 3 attempts to create pantry_item: ${item.name}", lastException)
         return null
     }
 
@@ -277,8 +282,72 @@ class PocketBaseSyncService(
                 }
             }
         }
-        android.util.Log.e("PocketBaseSync", "Failed all 3 attempts to update pantry_item ${item.id}", lastException)
+        Log.e("PocketBaseSync", "Failed all 3 attempts to update pantry_item ${item.id}", lastException)
         return null
+    }
+
+    override suspend fun uploadPantryItemImage(
+        itemId: String,
+        imageBytes: ByteArray,
+        filename: String
+    ): PantryItem? = writeMutex.withLock {
+        if (itemId.isEmpty() || itemId.startsWith("local_")) return@withLock null
+        val url = "$baseUrl/api/collections/pantry_items/records/$itemId"
+
+        var lastException: Exception? = null
+
+        for (attempt in 1..3) {
+            try {
+                Log.d("PocketBaseSync", "Uploading image for pantry_item $itemId (Attempt $attempt/3)")
+                val httpResponse = client.submitFormWithBinaryData(
+                    url = url,
+                    formData = formData {
+                        append("image", imageBytes, Headers.build {
+                            append(HttpHeaders.ContentType, "image/jpeg")
+                            append(HttpHeaders.ContentDisposition, "filename=\"$filename\"")
+                        })
+                    }
+                ) {
+                    method = HttpMethod.Patch
+                }
+
+                val responseText = httpResponse.bodyAsText()
+                Log.d("PocketBaseSync", "Upload image response status ${httpResponse.status}: $responseText")
+
+                if (httpResponse.status.isSuccess()) {
+                    val response: PocketBasePantryItem = json.decodeFromString(responseText)
+                    val updatedLocal = response.toLocal()
+                    val hostedCustomUrl = if (!response.image.isNullOrBlank()) {
+                        "$baseUrl/api/files/pantry_items/$itemId/${response.image}"
+                    } else updatedLocal.localImageUrl
+
+                    val finalItem = updatedLocal.copy(localImageUrl = hostedCustomUrl)
+
+                    val patchBody = json.encodeToString(
+                        PocketBasePantryItem.serializer(),
+                        finalItem.toPocketBase().copy(localImageUrl = hostedCustomUrl)
+                    )
+
+                    Log.d("PocketBaseSync", "Patching local_image_url to PocketBase: $patchBody")
+                    val patchResponse = client.patch(url) {
+                        contentType(ContentType.Application.Json)
+                        setBody(patchBody)
+                    }
+                    if (patchResponse.status.isSuccess()) {
+                        val patchedResponse: PocketBasePantryItem = patchResponse.body()
+                        return@withLock patchedResponse.toLocal().copy(localImageUrl = hostedCustomUrl)
+                    }
+                    delay(250)
+                    return@withLock finalItem
+                }
+            } catch (e: Exception) {
+                lastException = e
+                Log.e("PocketBaseSync", "Attempt $attempt exception for image upload $itemId: ${e.message}", e)
+                if (attempt < 3) delay(300L * attempt)
+            }
+        }
+        Log.e("PocketBaseSync", "Failed all 3 attempts to upload image for pantry_item $itemId", lastException)
+        return@withLock null
     }
 
     override suspend fun deletePantryItem(itemId: String): Boolean = writeMutex.withLock {
@@ -305,7 +374,7 @@ class PocketBaseSyncService(
         while (currentCoroutineContext().isActive) {
             try {
                 val url = "$baseUrl/api/realtime"
-                android.util.Log.d("PocketBaseSync", "Connecting to realtime pantry_items: $url")
+                Log.d("PocketBaseSync", "Connecting to realtime pantry_items: $url")
                 client.prepareGet(url) {
                     timeout {
                         requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -319,7 +388,7 @@ class PocketBaseSyncService(
                         val line = try {
                             channel.readUTF8Line()
                         } catch (e: Exception) {
-                            if (e is kotlinx.coroutines.CancellationException) throw e
+                            if (e is CancellationException) throw e
                             null
                         } ?: break
 
@@ -347,29 +416,29 @@ class PocketBaseSyncService(
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    android.util.Log.w("PocketBaseSync", "Failed to parse realtime pantry_items data: $data", e)
+                                    Log.w("PocketBaseSync", "Failed to parse realtime pantry_items data: $data", e)
                                 }
                             }
                         }
                     }
                 }
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException || !currentCoroutineContext().isActive) throw e
-                val isNetworkDown = e is java.net.UnknownHostException || 
-                                    e is java.net.ConnectException || 
-                                    e is java.net.SocketException ||
-                                    e.cause is java.net.UnknownHostException
+                if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isNetworkDown = e is UnknownHostException ||
+                                    e is ConnectException ||
+                                    e is SocketException ||
+                                    e.cause is UnknownHostException
                 if (isNetworkDown) {
-                    android.util.Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
-                    android.util.Log.e("PocketBaseSync", "Connection or stream error in observePantryItems: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                    Log.e("PocketBaseSync", "Connection or stream error in observePantryItems: ${e.message}. Retrying in ${retryDelay / 1000}s...")
                 }
                 if (!currentCoroutineContext().isActive) break
                 delay(retryDelay)
                 retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
             } catch (t: Throwable) {
                 if (!currentCoroutineContext().isActive) throw t
-                android.util.Log.e("PocketBaseSync", "Fatal error in observePantryItems", t)
+                Log.e("PocketBaseSync", "Fatal error in observePantryItems", t)
                 if (!currentCoroutineContext().isActive) break
                 delay(10000)
             }

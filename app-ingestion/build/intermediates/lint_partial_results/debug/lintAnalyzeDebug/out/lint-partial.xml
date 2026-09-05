@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="partial_results">
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="com.pantry.organiser.ingestion.MainActivity"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <location id="R.color.black"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="8"
+            column="12"
+            startOffset="300"
+            endLine="8"
+            endColumn="24"
+            endOffset="312"/>
+        <location id="R.color.purple_200"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="3"
+            column="12"
+            startOffset="64"
+            endLine="3"
+            endColumn="29"
+            endOffset="81"/>
+        <location id="R.color.purple_500"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="4"
+            column="12"
+            startOffset="112"
+            endLine="4"
+            endColumn="29"
+            endOffset="129"/>
+        <location id="R.color.purple_700"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="5"
+            column="12"
+            startOffset="160"
+            endLine="5"
+            endColumn="29"
+            endOffset="177"/>
+        <location id="R.color.teal_200"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="6"
+            column="12"
+            startOffset="208"
+            endLine="6"
+            endColumn="27"
+            endOffset="223"/>
+        <location id="R.color.teal_700"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="7"
+            column="12"
+            startOffset="254"
+            endLine="7"
+            endColumn="27"
+            endOffset="269"/>
+        <location id="R.color.white"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/colors.xml"
+            line="9"
+            column="12"
+            startOffset="343"
+            endLine="9"
+            endColumn="24"
+            endOffset="355"/>
+        <location id="R.string.device_role"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/values/config.xml"
+            line="4"
+            column="13"
+            startOffset="147"
+            endLine="4"
+            endColumn="31"
+            endOffset="165"/>
+        <location id="R.xml.file_paths"
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*resDir*0}/xml/file_paths.xml"
+            line="2"
+            column="1"
+            startOffset="40"
+            endLine="4"
+            endColumn="9"
+            endOffset="102"/>
+        <entry
+            name="model"
+            string="color[purple_200(D),purple_500(D),purple_700(D),teal_200(D),teal_700(D),black(D),white(D)],mipmap[ic_launcher(U)],string[device_role(D)],style[Theme_PantryOrganiser(U),Theme_Material3_DayNight_NoActionBar(R)],xml[network_security_config(U),file_paths(D)];9^a;;;"/>
+    </map>
+
+</incidents>
