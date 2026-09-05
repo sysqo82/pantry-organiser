@@ -1,5 +1,6 @@
 package com.pantry.organiser.dashboard.ui.components
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +26,7 @@ import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.dashboard.ui.PantryShelfGrid
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +52,14 @@ fun EditItemBottomSheet(
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val offUrl = item.imageUrl
+    val apiOffUrl = item.apiImageUrl
+    val hasOriginalOffImage = (!offUrl.isNullOrBlank() && offUrl.contains("openfoodfacts")) ||
+        (!apiOffUrl.isNullOrBlank() && apiOffUrl.contains("openfoodfacts"))
+
+    val isCustomImageActive = !item.localImageUrl.isNullOrBlank() || !item.localImageUri.isNullOrBlank()
+    val showRestoreButton = hasOriginalOffImage && isCustomImageActive
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -91,12 +102,48 @@ fun EditItemBottomSheet(
                     ProductThumbnail(
                         imageUrl = item.imageUrl,
                         apiImageUrl = item.apiImageUrl,
+                        localImageUrl = item.localImageUrl,
                         localImageUri = item.localImageUri,
                         itemName = name,
                         thumbnailSize = null,
                         updatedAt = item.updatedAt,
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+
+                if (showRestoreButton) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            item.localImageUri?.let { path ->
+                                try {
+                                    val file = File(path)
+                                    if (file.exists()) file.delete()
+                                } catch (e: Exception) {
+                                    Log.e("EditItemSheet", "Failed to delete local custom image: ${e.message}")
+                                }
+                            }
+
+                            val originalOffUrl = item.imageUrl?.takeIf { it.contains("openfoodfacts") }
+                                ?: item.apiImageUrl?.takeIf { it.contains("openfoodfacts") }
+
+                            val restoredItem = item.copy(
+                                name = name.ifBlank { "Unnamed Item" },
+                                brand = brand.ifBlank { null },
+                                packageQuantity = packageQuantity.ifBlank { null },
+                                imageUrl = originalOffUrl ?: item.imageUrl,
+                                apiImageUrl = originalOffUrl ?: item.apiImageUrl,
+                                localImageUrl = null,
+                                localImageUri = null,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            onSave(restoredItem)
+                        }
+                    ) {
+                        Icon(Icons.Default.Restore, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Restore Original Image")
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -187,10 +234,11 @@ fun EditItemBottomSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FillLevel.entries.forEach { level ->
+                            val chipLabel = if (level == FillLevel.FULL) "Unopened" else level.label
                             FilterChip(
                                 selected = activeFill == level,
                                 onClick = { activeFill = level },
-                                label = { Text(level.label) },
+                                label = { Text(chipLabel) },
                                 modifier = Modifier.weight(1f)
                             )
                         }

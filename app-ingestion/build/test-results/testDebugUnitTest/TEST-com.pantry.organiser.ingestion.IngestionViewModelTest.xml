@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.pantry.organiser.ingestion.IngestionViewModelTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-09-05T15:47:13" hostname="POOKY-PC" time="9.0">
+  <properties/>
+  <testcase name="scanning barcode in INSERT mode sets Network Error when OFF repository throws exception" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="7.015"/>
+  <testcase name="scanning duplicate barcode in INSERT mode signals duplicate without adding new item" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.201"/>
+  <testcase name="scanning barcode in INSERT mode sets Unknown Product when OFF returns null" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.139"/>
+  <testcase name="setMode updates UI state mode" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.124"/>
+  <testcase name="scanning barcode in CHECK mode signals success and returns to HOME" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.155"/>
+  <testcase name="initial state is HOME with empty items" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.121"/>
+  <testcase name="sendToPantry dispatches batch payload with itemIds and resets mode to HOME" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.264"/>
+  <testcase name="sendToPantry resets isSending to false on exception" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.236"/>
+  <testcase name="scanning barcode in INSERT mode enriches item via OpenFoodFacts" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.143"/>
+  <testcase name="startRealtimeSync fetches initial items and observes updates" classname="com.pantry.organiser.ingestion.IngestionViewModelTest" time="0.591"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+SLF4J: Defaulting to no-operation (NOP) logger implementation
+SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+]]></system-err>
+</testsuite>

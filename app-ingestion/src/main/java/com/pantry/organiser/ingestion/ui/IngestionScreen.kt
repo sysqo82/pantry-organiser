@@ -2,6 +2,7 @@ package com.pantry.organiser.ingestion.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.view.PreviewView
@@ -32,16 +33,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
+import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.ingestion.FeedbackEffect
 import com.pantry.organiser.ingestion.IngestionMode
 import com.pantry.organiser.ingestion.IngestionViewModel
+import com.pantry.organiser.ingestion.ui.components.ItemPhotoCaptureOverlay
 import kotlinx.coroutines.delay
 
 @Composable
@@ -56,6 +61,16 @@ fun IngestionScreen(
     var selectedCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var selectedShelfFilter by remember { mutableStateOf<Int?>(null) }
     var selectedItem by remember { mutableStateOf<PantryItem?>(null) }
+    var photoCaptureItem by remember { mutableStateOf<PantryItem?>(null) }
+
+    // Intercept system back button when camera scanner or photo capture overlay is active
+    BackHandler(enabled = uiState.mode != IngestionMode.HOME || photoCaptureItem != null) {
+        if (photoCaptureItem != null) {
+            photoCaptureItem = null
+        } else {
+            viewModel.setMode(IngestionMode.HOME)
+        }
+    }
 
     val filteredItems = remember(selectedItem, selectedCell, selectedShelfFilter, uiState.items) {
         when {
@@ -131,7 +146,7 @@ fun IngestionScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-            if (uiState.mode == IngestionMode.HOME) {
+            if (uiState.mode == IngestionMode.HOME && photoCaptureItem == null) {
                 Surface(
                     tonalElevation = 8.dp,
                     shadowElevation = 8.dp,
@@ -212,10 +227,10 @@ fun IngestionScreen(
                                 Column {
                                     Text(
                                         if (selectedItem != null) "Highlighted: ${selectedItem?.name} (S${selectedItem?.shelfNumber}-${PantryConstants.getZoneLabel(selectedItem?.zoneIndex ?: 0)})"
-                                        else "Tap a cell to filter, or tap an item below to highlight location:",
+                                        else "Tap a cell to filter, tap an item image to replace photo, or tap item to highlight location:",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (selectedItem != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (selectedItem != null) FontWeight.Bold else FontWeight.Normal,
+                                        fontWeight = FontWeight.Normal,
                                         modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
                                     )
                                     Box(
@@ -226,9 +241,22 @@ fun IngestionScreen(
                                         PantryShelfGrid(
                                             selectedCell = selectedCell,
                                             onCellClick = { row, col ->
-                                                selectedItem = null
-                                                selectedShelfFilter = null
-                                                selectedCell = if (selectedCell == Pair(row, col)) null else Pair(row, col)
+                                                val clickedCell = Pair(row, col)
+                                                val isSameCell = selectedCell == clickedCell
+                                                val isItemInCell = selectedItem != null &&
+                                                        selectedItem?.shelfNumber == PantryConstants.rowToShelf(row) &&
+                                                        selectedItem?.zoneIndex == PantryConstants.colToZone(col)
+
+                                                if (isSameCell || isItemInCell || selectedItem != null) {
+                                                    // Uncheck BOTH item and shelf/cell filter
+                                                    selectedItem = null
+                                                    selectedCell = null
+                                                    selectedShelfFilter = null
+                                                } else {
+                                                    selectedItem = null
+                                                    selectedShelfFilter = null
+                                                    selectedCell = clickedCell
+                                                }
                                             },
                                             pantryItems = uiState.items,
                                             highlightedItem = selectedItem
@@ -262,9 +290,19 @@ fun IngestionScreen(
                                         FilterChip(
                                             selected = selectedShelfFilter == shelf || isHighlightedShelf,
                                             onClick = {
-                                                selectedCell = null
-                                                selectedItem = null
-                                                selectedShelfFilter = if (selectedShelfFilter == shelf) null else shelf
+                                                val isSameShelf = selectedShelfFilter == shelf
+                                                val isItemOnShelf = selectedItem?.shelfNumber == shelf
+
+                                                if (isSameShelf || isItemOnShelf || selectedItem != null) {
+                                                    // Uncheck BOTH item and shelf filter
+                                                    selectedShelfFilter = null
+                                                    selectedItem = null
+                                                    selectedCell = null
+                                                } else {
+                                                    selectedCell = null
+                                                    selectedItem = null
+                                                    selectedShelfFilter = shelf
+                                                }
                                             },
                                             label = { Text("Shelf $shelf: $count") },
                                             colors = FilterChipDefaults.filterChipColors(
@@ -287,7 +325,11 @@ fun IngestionScreen(
                         if (selectedItem != null) {
                             InputChip(
                                 selected = true,
-                                onClick = { selectedItem = null },
+                                onClick = {
+                                    selectedItem = null
+                                    selectedCell = null
+                                    selectedShelfFilter = null
+                                },
                                 label = { Text(selectedItem!!.name) },
                                 leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                 trailingIcon = { Icon(Icons.Default.Clear, contentDescription = "Clear Highlight") }
@@ -300,14 +342,22 @@ fun IngestionScreen(
 
                             InputChip(
                                 selected = true,
-                                onClick = { selectedCell = null },
+                                onClick = {
+                                    selectedCell = null
+                                    selectedItem = null
+                                    selectedShelfFilter = null
+                                },
                                 label = { Text("Filter: Shelf $shelf-$zoneLabel (${filteredItems.size})") },
                                 trailingIcon = { Icon(Icons.Default.Clear, contentDescription = "Clear") }
                             )
                         } else if (selectedShelfFilter != null) {
                             InputChip(
                                 selected = true,
-                                onClick = { selectedShelfFilter = null },
+                                onClick = {
+                                    selectedShelfFilter = null
+                                    selectedItem = null
+                                    selectedCell = null
+                                },
                                 label = { Text("Filter: Shelf ${selectedShelfFilter} (${filteredItems.size})") },
                                 trailingIcon = { Icon(Icons.Default.Clear, contentDescription = "Clear") }
                             )
@@ -350,9 +400,16 @@ fun IngestionScreen(
                                     .fillMaxWidth()
                                     .clickable {
                                         if (selectedItem?.id == item.id) {
+                                            // Uncheck BOTH
                                             selectedItem = null
+                                            selectedCell = null
+                                            selectedShelfFilter = null
                                         } else {
+                                            val cellRow = 4 - item.shelfNumber
+                                            val cellCol = item.zoneIndex - 1
                                             selectedItem = item
+                                            selectedCell = Pair(cellRow, cellCol)
+                                            selectedShelfFilter = null
                                             isGridExpanded = true // Ensure shelf grid is visible
                                         }
                                     },
@@ -366,11 +423,20 @@ fun IngestionScreen(
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),
                                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(72.dp)
+                                            modifier = Modifier
+                                                .size(72.dp)
+                                                .clickable {
+                                                    if (!hasCameraPermission) {
+                                                        launcher.launch(Manifest.permission.CAMERA)
+                                                    } else {
+                                                        photoCaptureItem = item
+                                                    }
+                                                }
                                         ) {
-                                            if (!item.imageUrl.isNullOrBlank()) {
+                                            val activeImageSource = item.activeImageSource
+                                            if (!activeImageSource.isNullOrBlank()) {
                                                 AsyncImage(
-                                                    model = item.imageUrl,
+                                                    model = activeImageSource,
                                                     contentDescription = item.name,
                                                     contentScale = ContentScale.Fit,
                                                     modifier = Modifier
@@ -407,19 +473,75 @@ fun IngestionScreen(
                                         )
                                     },
                                     trailingContent = {
-                                        Surface(
-                                            color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.primaryContainer,
-                                            shape = RoundedCornerShape(8.dp)
+                                        Column(
+                                            horizontalAlignment = Alignment.End,
+                                            verticalArrangement = Arrangement.Center
                                         ) {
-                                            Text(
-                                                "Stock: ${item.formattedStockText}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
-                                                else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                            )
+                                            if (item.trackingType == TrackingType.BULK_LEVEL && item.activeFill == FillLevel.FULL) {
+                                                val totalSealed = item.sealedCount + 1
+                                                Surface(
+                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.primaryContainer,
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "$totalSealed Sealed",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
+                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            } else if (item.trackingType == TrackingType.BULK_LEVEL) {
+                                                Surface(
+                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.primaryContainer,
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = item.activeFill.label,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
+                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                                if (item.sealedCount > 0) {
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Surface(
+                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.primaryContainer
+                                                        else MaterialTheme.colorScheme.secondaryContainer,
+                                                        shape = RoundedCornerShape(6.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "${item.sealedCount} Sealed",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontSize = 10.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimaryContainer
+                                                            else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                Surface(
+                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.primaryContainer,
+                                                    shape = RoundedCornerShape(8.dp)
+                                                ) {
+                                                    Text(
+                                                        text = item.formattedStockText,
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
+                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
                                         }
                                     },
                                     colors = ListItemDefaults.colors(
@@ -431,6 +553,19 @@ fun IngestionScreen(
                         }
                     }
                 }
+            }
+
+            // ITEM PHOTO CAPTURE OVERLAY
+            if (photoCaptureItem != null) {
+                ItemPhotoCaptureOverlay(
+                    item = photoCaptureItem!!,
+                    onPhotoCapturedAndCropped = { bytes, _ ->
+                        val targetItem = photoCaptureItem!!
+                        photoCaptureItem = null
+                        viewModel.uploadCustomItemPhoto(context, targetItem, bytes)
+                    },
+                    onCancel = { photoCaptureItem = null }
+                )
             }
 
             // SCANNER OVERLAY

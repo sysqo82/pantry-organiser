@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="conditional_incidents">
+
+    <incident
+        id="InlinedApi"
+        severity="warning"
+        message="">
+        <fix-data minSdk="ffffffffff800000" requiresApi="fffffffff0000000"/>
+        <location
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*javaDir*0}/com/pantry/organiser/ingestion/AndroidFeedbackController.kt"
+            line="31"
+            column="17"
+            startOffset="1130"
+            endLine="31"
+            endColumn="51"
+            endOffset="1164"/>
+        <map>
+            <entry
+                name="message"
+                string="Field requires API level 29 (current min is %1$s): `android.os.VibrationEffect#EFFECT_HEAVY_CLICK`"/>
+            <api-levels id="minSdk"
+                value="ffffffffff800000"/>
+            <entry
+                name="name"
+                string="EFFECT_HEAVY_CLICK"/>
+            <entry
+                name="owner"
+                string="android.os.VibrationEffect"/>
+            <api-levels id="requiresApi"
+                value="fffffffff0000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="InlinedApi"
+        severity="warning"
+        message="">
+        <fix-data minSdk="ffffffffff800000" requiresApi="fffffffff0000000"/>
+        <location
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*javaDir*0}/com/pantry/organiser/ingestion/AndroidFeedbackController.kt"
+            line="36"
+            column="17"
+            startOffset="1294"
+            endLine="36"
+            endColumn="52"
+            endOffset="1329"/>
+        <map>
+            <entry
+                name="message"
+                string="Field requires API level 29 (current min is %1$s): `android.os.VibrationEffect#EFFECT_DOUBLE_CLICK`"/>
+            <api-levels id="minSdk"
+                value="ffffffffff800000"/>
+            <entry
+                name="name"
+                string="EFFECT_DOUBLE_CLICK"/>
+            <entry
+                name="owner"
+                string="android.os.VibrationEffect"/>
+            <api-levels id="requiresApi"
+                value="fffffffff0000000"/>
+        </map>
+    </incident>
+
+    <incident
+        id="LockedOrientationActivity"
+        severity="warning"
+        message="Expecting `android:screenOrientation=&quot;unspecified&quot;` or `&quot;fullSensor&quot;` for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices">
+        <fix-attribute
+            description="Set screenOrientation=&quot;fullSensor&quot;"
+            robot="true"
+            independent="true"
+            namespace="http://schemas.android.com/apk/res/android"
+            attribute="screenOrientation"
+            value="fullSensor"/>
+        <location
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="19"
+            column="13"
+            startOffset="773"
+            endLine="19"
+            endColumn="49"
+            endOffset="809"/>
+        <map>
+            <condition library="false"/>
+        </map>
+    </incident>
+
+    <incident
+        id="PermissionImpliesUnsupportedChromeOsHardware"
+        severity="error"
+        message="Permission exists without corresponding hardware `&lt;uses-feature android:name=&quot;android.hardware.camera&quot; required=&quot;false&quot;>` tag">
+        <fix-data featureName="android.hardware.camera"/>
+        <location
+            file="${:app-ingestion*debug*MAIN*sourceProvider*0*manifest*0}"
+            line="5"
+            column="6"
+            startOffset="186"
+            endLine="5"
+            endColumn="21"
+            endOffset="201"/>
+        <map>
+            <condition library="false"/>
+        </map>
+    </incident>
+
+</incidents>
