@@ -3,6 +3,7 @@ package com.pantry.organiser.dashboard
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
 import com.pantry.organiser.dashboard.data.PantryRepository
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.data.SyncQueueRepository
@@ -22,6 +23,7 @@ class DashboardViewModelTest {
 
     private val syncQueueRepository = mockk<SyncQueueRepository>(relaxed = true)
     private val pantryRepository = mockk<PantryRepository>(relaxed = true)
+    private val openFoodFactsProber = mockk<OpenFoodFactsProber>(relaxed = true)
     private lateinit var viewModel: DashboardViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -30,7 +32,7 @@ class DashboardViewModelTest {
         Dispatchers.setMain(testDispatcher)
         every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
         every { pantryRepository.allItems } returns flowOf(emptyList())
-        viewModel = DashboardViewModel(syncQueueRepository, pantryRepository)
+        viewModel = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
     }
 
     @After
@@ -458,7 +460,7 @@ class DashboardViewModelTest {
         val unsortedItems = listOf(itemS1, itemS4R, itemS4M)
         every { pantryRepository.allItems } returns flowOf(unsortedItems)
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
         val stateItems = vm.uiState.value.pantryItems
 
         // Expected spatial order: S4-M (shelf 4, zone 2), S4-R (shelf 4, zone 3), S1-L (shelf 1, zone 1)
@@ -511,7 +513,7 @@ class DashboardViewModelTest {
         every { pantryRepository.allItems } returns flowOf(listOf(assignedItem, unassignedItem))
         coEvery { pantryRepository.getItemByBarcode("12345") } returns assignedItem
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
 
         vm.processItem(syncItem)
 
@@ -540,5 +542,19 @@ class DashboardViewModelTest {
 
         val deleted = deleteSlot.captured
         assertEquals("unassigned_2", deleted.id)
+    }
+
+    @Test
+    fun `probeOpenFoodFacts triggers prober and updates probeMessage in state`() = runTest {
+        coEvery { openFoodFactsProber.probeAndSync() } returns 2
+
+        viewModel.probeOpenFoodFacts()
+
+        coVerify(exactly = 1) { openFoodFactsProber.probeAndSync() }
+        assertEquals("Probed Open Food Facts: 2 item(s) updated.", viewModel.uiState.value.probeMessage)
+        assertFalse(viewModel.uiState.value.isProbing)
+
+        viewModel.clearProbeMessage()
+        assertNull(viewModel.uiState.value.probeMessage)
     }
 }

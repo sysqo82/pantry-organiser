@@ -51,9 +51,19 @@ fun DashboardScreen(
         }
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.probeMessage) {
+        uiState.probeMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearProbeMessage()
+        }
+    }
+
     Scaffold(
         topBar = {
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier

@@ -6,6 +6,7 @@ import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
 import com.pantry.organiser.dashboard.data.PantryRepository
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.data.SyncQueueRepository
@@ -21,13 +22,16 @@ data class DashboardUiState(
     val pantryItems: List<PantryItem> = emptyList(),
     val activeOverlay: OverlayContext? = null,
     val pantryId: String = "default-pantry",
-    val isSaving: Boolean = false
+    val isSaving: Boolean = false,
+    val isProbing: Boolean = false,
+    val probeMessage: String? = null
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val syncQueueRepository: SyncQueueRepository,
-    private val pantryRepository: PantryRepository
+    private val pantryRepository: PantryRepository,
+    private val openFoodFactsProber: OpenFoodFactsProber
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -401,5 +405,23 @@ class DashboardViewModel @Inject constructor(
 
     fun dismissOverlay() {
         _uiState.update { it.copy(activeOverlay = null) }
+    }
+
+    fun probeOpenFoodFacts() {
+        if (_uiState.value.isProbing) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProbing = true) }
+            val updatedCount = openFoodFactsProber.probeAndSync()
+            val msg = if (updatedCount > 0) {
+                "Probed Open Food Facts: $updatedCount item(s) updated."
+            } else {
+                "Probed Open Food Facts: All items are up to date."
+            }
+            _uiState.update { it.copy(isProbing = false, probeMessage = msg) }
+        }
+    }
+
+    fun clearProbeMessage() {
+        _uiState.update { it.copy(probeMessage = null) }
     }
 }
