@@ -39,7 +39,7 @@ fun EnrichmentOverlay(
     onDismiss: () -> Unit
 ) {
     var quantityToAdd by remember { mutableIntStateOf(1) }
-    var selectedFillLevel by remember { mutableStateOf(existingItem?.activeFill ?: FillLevel.FULL) }
+    var selectedFillLevel by remember { mutableStateOf(if (isPastItem) FillLevel.FULL else (existingItem?.activeFill ?: FillLevel.FULL)) }
 
     val defaultRow = suggestedShelf?.first
         ?: existingItem?.shelfNumber?.let { 4 - it }

@@ -96,7 +96,7 @@ class DashboardViewModel @Inject constructor(
                 } else null
 
                 if (pastItem != null) {
-                    val pastAsPantry = pastItem.toPantryItem().copy(isAssigned = false)
+                    val pastAsPantry = pastItem.toPantryItem().copy(isAssigned = false, activeFill = FillLevel.FULL)
                     val suggestedRow = 4 - pastItem.shelfNumber
                     val suggestedCol = pastItem.zoneIndex - 1
                     _uiState.update {
@@ -242,7 +242,7 @@ class DashboardViewModel @Inject constructor(
                     sealedCount = initialSealed,
                     unitsPerPack = inferredUnits,
                     activeCount = inferredUnits,
-                    activeFill = fillLevel,
+                    activeFill = if (isPastItem) FillLevel.FULL else fillLevel,
                     isAssigned = true, // Assigned!
                     createdAt = existingItem?.createdAt ?: System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
@@ -315,14 +315,19 @@ class DashboardViewModel @Inject constructor(
                     }
                 } else {
                     val prevFill = item.activeFill.prev()
-                    if (prevFill == FillLevel.EMPTY && item.sealedCount > 0) {
-                        val updated = item.copy(
-                            sealedCount = item.sealedCount - 1,
-                            activeFill = FillLevel.FULL,
-                            updatedAt = System.currentTimeMillis()
-                        )
-                        pantryRepository.updateItem(updated)
-                        updateOverlayIfShowing(updated)
+                    if (prevFill == FillLevel.EMPTY) {
+                        if (item.sealedCount > 0) {
+                            val updated = item.copy(
+                                sealedCount = item.sealedCount - 1,
+                                activeFill = FillLevel.FULL,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            pantryRepository.updateItem(updated)
+                            updateOverlayIfShowing(updated)
+                        } else {
+                            pantryRepository.moveToPastItems(item)
+                            updateOverlayIfShowing(null)
+                        }
                     } else {
                         val updated = item.copy(
                             activeFill = prevFill,
@@ -370,17 +375,24 @@ class DashboardViewModel @Inject constructor(
 
     fun updateFillLevel(item: PantryItem, fillLevel: FillLevel) {
         viewModelScope.launch {
-            val updated = if (fillLevel == FillLevel.EMPTY && item.sealedCount > 0) {
-                item.copy(
-                    sealedCount = item.sealedCount - 1,
-                    activeFill = FillLevel.FULL,
-                    updatedAt = System.currentTimeMillis()
-                )
+            if (fillLevel == FillLevel.EMPTY) {
+                if (item.sealedCount > 0) {
+                    val updated = item.copy(
+                        sealedCount = item.sealedCount - 1,
+                        activeFill = FillLevel.FULL,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    pantryRepository.updateItem(updated)
+                    updateOverlayIfShowing(updated)
+                } else {
+                    pantryRepository.moveToPastItems(item)
+                    updateOverlayIfShowing(null)
+                }
             } else {
-                item.copy(activeFill = fillLevel, updatedAt = System.currentTimeMillis())
+                val updated = item.copy(activeFill = fillLevel, updatedAt = System.currentTimeMillis())
+                pantryRepository.updateItem(updated)
+                updateOverlayIfShowing(updated)
             }
-            pantryRepository.updateItem(updated)
-            updateOverlayIfShowing(updated)
         }
     }
 

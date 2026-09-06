@@ -237,6 +237,26 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `consumeItem on bulk item at LOW with no reserve moves item to past items`() = runTest {
+        val bulkItem = PantryItem(
+            id = "salt_1",
+            name = "British Cooking Salt",
+            shelfNumber = 3,
+            zoneIndex = 2,
+            trackingType = TrackingType.BULK_LEVEL,
+            sealedCount = 0,
+            activeFill = FillLevel.LOW
+        )
+
+        val slot = slot<PantryItem>()
+        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
+
+        viewModel.consumeItem(bulkItem)
+
+        assertEquals("salt_1", slot.captured.id)
+    }
+
+    @Test
     fun `restockItem on empty bulk item refills active fill to FULL`() = runTest {
         val bulkItem = PantryItem(
             id = "salt_1",
@@ -710,5 +730,6 @@ class DashboardViewModelTest {
         assertEquals("5012345678901", saved.barcode)
         assertEquals(4, saved.shelfNumber)
         assertEquals(2, saved.zoneIndex)
+        assertEquals(FillLevel.FULL, saved.activeFill)
     }
 }

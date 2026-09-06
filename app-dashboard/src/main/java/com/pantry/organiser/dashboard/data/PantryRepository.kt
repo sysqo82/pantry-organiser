@@ -43,8 +43,11 @@ class PantryRepository @Inject constructor(
                     val isGhostServerItem = !local.id.startsWith("local_") && !remoteIds.contains(local.id)
                     val isGenericGhost = isGenericOrEmpty && (!local.hasStock || local.barcode.isNullOrBlank())
 
-                    // Prune local items that no longer exist on the server or generic local ghosts
-                    if (isGhostServerItem || isGenericGhost) {
+                    // Migrate zero-stock assigned items to past items, or prune ghost items
+                    if (local.isAssigned && !local.hasStock) {
+                        Log.i("PantryRepo", "Migrating zero-stock assigned item to past items: ${local.name} (${local.id})")
+                        moveToPastItems(local)
+                    } else if (isGhostServerItem || isGenericGhost) {
                         Log.i("PantryRepo", "Pruning ghost item: ${local.name} (${local.id})")
                         pantryDao.deleteItem(local)
                     } else if (local.id.startsWith("local_")) {
