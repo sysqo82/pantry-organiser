@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,43 +18,51 @@ class AndroidFeedbackController @Inject constructor(
     @ApplicationContext private val context: Context
 ) : FeedbackController {
 
-    private val _effects = MutableSharedFlow<FeedbackEffect>(extraBufferCapacity = 1)
+    private val _effects = MutableSharedFlow<FeedbackEffect>(replay = 1, extraBufferCapacity = 1)
     override val effects: SharedFlow<FeedbackEffect> = _effects.asSharedFlow()
 
-    private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
-        vibratorManager.defaultVibrator
-    } else {
-        context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    @Suppress("DEPRECATION")
+    private val vibrator: Vibrator? by lazy {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+            } else {
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+        } catch (e: Exception) {
+            Log.e("FeedbackController", "Failed to acquire Vibrator service: ${e.message}")
+            null
+        }
     }
 
     override fun signalSuccess() {
-        vibrate(VibrationEffect.EFFECT_HEAVY_CLICK, longArrayOf(0, 150))
+        // Visual green flash only, no haptic vibration for successful scan
         _effects.tryEmit(FeedbackEffect.Success)
     }
 
     override fun signalUnknown() {
-        vibrate(VibrationEffect.EFFECT_DOUBLE_CLICK, longArrayOf(0, 100, 100, 100))
+        vibrate(longArrayOf(0, 150, 100, 150))
         _effects.tryEmit(FeedbackEffect.Unknown)
     }
 
     override fun signalDuplicate() {
-        // No haptic as per PRD
+        vibrate(longArrayOf(0, 100, 100, 100))
         _effects.tryEmit(FeedbackEffect.Duplicate)
     }
 
-    private fun vibrate(effectId: Int, fallbackPattern: LongArray) {
+    private fun vibrate(pattern: LongArray) {
+        val v = vibrator
+        if (v == null || !v.hasVibrator()) return
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                vibrator.vibrate(VibrationEffect.createPredefined(effectId))
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(fallbackPattern, -1))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createWaveform(pattern, -1))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(fallbackPattern, -1)
+                v.vibrate(pattern, -1)
             }
         } catch (e: Exception) {
-            android.util.Log.e("FeedbackController", "Vibration failed", e)
+            Log.e("FeedbackController", "Vibration failed: ${e.message}", e)
         }
     }
 }

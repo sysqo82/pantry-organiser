@@ -53,4 +53,15 @@ class PantryItemTest {
         assertEquals(TrackingType.DISCRETE_COUNT, soup)
         assertEquals(TrackingType.DISCRETE_COUNT, tuna)
     }
+
+    @Test
+    fun `determineTrackingType categorizes pearl couscous as discrete`() {
+        val pearlCouscous = PantryItem.determineTrackingType(name = "Tesco Pearl Couscous", quantity = "500g")
+        val giantCouscous = PantryItem.determineTrackingType(name = "Sainsbury's Giant Couscous", quantity = "300g")
+        val israeliCouscous = PantryItem.determineTrackingType(name = "Merchant Gourmet Israeli Couscous", quantity = "250g")
+
+        assertEquals(TrackingType.DISCRETE_COUNT, pearlCouscous)
+        assertEquals(TrackingType.DISCRETE_COUNT, giantCouscous)
+        assertEquals(TrackingType.DISCRETE_COUNT, israeliCouscous)
+    }
 }

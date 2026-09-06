@@ -1,16 +1,23 @@
 *.iml
-.gradle
+*.log
+.gradle/
+**/.gradle/
 /local.properties
 /.idea/
 .DS_Store
-/build
-/app/build
+
+# Build directories (all subprojects and root)
+build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
 .artifacts/
 .kotlin/
+**/.kotlin/
+
+# Gradle caches and distributions
 gradle/caches/
 gradle/daemon/
 gradle/native/
@@ -18,6 +25,9 @@ gradle/workers/
 gradle/jdks/
 gradle/.tmp/
 gradle/kotlin-profile/
+gradle/wrapper/dists/
+
+# Keep wrapper files
 !gradle/wrapper/gradle-wrapper.jar
 !gradle/wrapper/gradle-wrapper.properties
 !gradle/libs.versions.toml

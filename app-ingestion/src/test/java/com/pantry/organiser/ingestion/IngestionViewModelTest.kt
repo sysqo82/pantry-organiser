@@ -72,14 +72,34 @@ class IngestionViewModelTest {
     }
 
     @Test
-    fun `scanning barcode in CHECK mode signals success and returns to HOME`() = runTest {
+    fun `scanning barcode in CHECK mode for existing item signals success and sets scannedCheckItem`() = runTest {
+        val existing = PantryItem(id = "123", name = "Sweetcorn", barcode = "5000123456789", shelfNumber = 1, zoneIndex = 1, isAssigned = true)
+        coEvery { syncService.fetchPantryItems(any()) } returns listOf(existing)
+
         viewModel.setMode(IngestionMode.CHECK)
 
         barcodeFlow.emit("5000123456789")
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(IngestionMode.HOME, viewModel.uiState.value.mode)
+        assertEquals(existing, viewModel.uiState.value.scannedCheckItem)
         verify { feedbackController.signalSuccess() }
+    }
+
+    @Test
+    fun `scanning barcode in CHECK mode for item not in pantry signals unknown and populates checkedNotFound`() = runTest {
+        coEvery { syncService.fetchPantryItems(any()) } returns emptyList()
+
+        viewModel.setMode(IngestionMode.CHECK)
+
+        barcodeFlow.emit("9999999999999")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(IngestionMode.HOME, viewModel.uiState.value.mode)
+        assertNull(viewModel.uiState.value.scannedCheckItem)
+        assertNotNull(viewModel.uiState.value.checkedNotFound)
+        assertEquals("9999999999999", viewModel.uiState.value.checkedNotFound?.barcode)
+        verify { feedbackController.signalUnknown() }
     }
 
     @Test
@@ -227,5 +247,30 @@ class IngestionViewModelTest {
 
         assertEquals(1, viewModel.uiState.value.items.size)
         assertEquals("Soy Sauce", viewModel.uiState.value.items[0].name)
+    }
+
+    @Test
+    fun `receiving unassigned item update does not remove assigned item with same barcode`() = runTest {
+        val initialItems = listOf(
+            PantryItem(id = "assigned_1", name = "Pizza Topper", barcode = "12345", shelfNumber = 3, zoneIndex = 2, isAssigned = true)
+        )
+        val realtimeFlow = MutableSharedFlow<PantryItem>()
+
+        coEvery { syncService.fetchPantryItems("default-pantry") } returns initialItems
+        every { syncService.observePantryItems("default-pantry") } returns realtimeFlow
+
+        viewModel.startRealtimeSync()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.items.size)
+
+        // Emit an unassigned scan event with same barcode
+        val unassignedItem = PantryItem(id = "unassigned_2", name = "Pizza Topper", barcode = "12345", shelfNumber = 1, zoneIndex = 1, isAssigned = false)
+        realtimeFlow.emit(unassignedItem)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Assigned item should NOT be removed from items list!
+        assertEquals(1, viewModel.uiState.value.items.size)
+        assertEquals("assigned_1", viewModel.uiState.value.items[0].id)
     }
 }

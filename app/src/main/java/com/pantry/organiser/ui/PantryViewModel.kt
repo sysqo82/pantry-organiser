@@ -28,7 +28,10 @@ data class PantryUiState(
     val pendingConsumeItem: PantryItem? = null,
     val isReadOnly: Boolean = false, // Device-level capability lock
     val isVisualSearchVisible: Boolean = false,
-    val visualSearchSelectedItem: PantryItem? = null
+    val visualSearchSelectedItem: PantryItem? = null,
+    val searchQuery: String = "",
+    val isSearchingOnTheFly: Boolean = false,
+    val selectedItemSuggestions: List<SmartInventorySuggestion> = emptyList()
 )
 
 class PantryViewModel(
@@ -149,15 +152,51 @@ class PantryViewModel(
     }
 
     fun hideVisualSearch() {
-        _uiState.update { it.copy(isVisualSearchVisible = false, visualSearchSelectedItem = null) }
+        _uiState.update { 
+            it.copy(
+                isVisualSearchVisible = false, 
+                visualSearchSelectedItem = null,
+                searchQuery = "",
+                selectedItemSuggestions = emptyList()
+            ) 
+        }
+    }
+
+    fun onSearchQueryChanged(query: String) {
+        _uiState.update { it.copy(searchQuery = query, isSearchingOnTheFly = true) }
+        viewModelScope.launch {
+            val results = repository.searchItemsOnTheFly(query)
+            _uiState.update { currentState ->
+                val filtered = if (query.isBlank()) {
+                    filterItems(currentState.items, currentState.selectedShelf)
+                } else {
+                    results
+                }
+                currentState.copy(
+                    filteredItems = filtered,
+                    isSearchingOnTheFly = false
+                )
+            }
+        }
     }
 
     fun selectVisualSearchItem(item: PantryItem) {
-        _uiState.update { it.copy(visualSearchSelectedItem = item) }
+        val suggestions = InventorySuggestionEngine.generateSuggestions(item)
+        _uiState.update { 
+            it.copy(
+                visualSearchSelectedItem = item,
+                selectedItemSuggestions = suggestions
+            ) 
+        }
     }
 
     fun clearVisualSearchItem() {
-        _uiState.update { it.copy(visualSearchSelectedItem = null) }
+        _uiState.update { 
+            it.copy(
+                visualSearchSelectedItem = null,
+                selectedItemSuggestions = emptyList()
+            ) 
+        }
     }
 
     fun selectItem(item: PantryItem) {

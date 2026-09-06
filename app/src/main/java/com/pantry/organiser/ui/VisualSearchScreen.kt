@@ -1,12 +1,12 @@
 package com.pantry.organiser.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.ui.components.ProductThumbnail
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,7 +36,7 @@ fun VisualSearchScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f)) // Use Theme Background
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
             .pointerInput(Unit) {
                 detectTapGestures { onInteraction() }
             }
@@ -104,7 +103,7 @@ fun VisualCatalogCard(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(16.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -123,7 +122,7 @@ fun VisualCatalogCard(
                     localImageUri = item.localImageUri,
                     itemName = item.name,
                     updatedAt = item.updatedAt,
-                    thumbnailSize = 170.dp, // Size to fit the box
+                    thumbnailSize = 170.dp,
                     contentScale = ContentScale.Fit
                 )
             }
@@ -158,7 +157,7 @@ fun VisualCatalogCard(
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
                 ) {
                     Text(
                         text = "S${item.shelfNumber}-${getZoneLabel(item.zoneIndex)}",
@@ -169,11 +168,18 @@ fun VisualCatalogCard(
                     )
                 }
                 
-                Text(
-                    text = "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    color = if (item.isLowStock) Color(0xFFD32F2F) else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (item.isLowStock) "Low Stock" else "${item.totalDisplayCount} ${item.getDisplayUnitLabel()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (item.isLowStock) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                    )
+                }
             }
         }
     }
