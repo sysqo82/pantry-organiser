@@ -8,8 +8,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
@@ -22,7 +20,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -41,9 +38,6 @@ fun EnrichmentOverlay(
     onSave: (Int, Int, Int, FillLevel) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var prototypeOption by remember { mutableIntStateOf(1) } // 1: Split View, 2: Strips, 3: Wizard
-    var wizardStep by remember { mutableIntStateOf(1) } // For Option 3: Step 1 or 2
-
     var quantityToAdd by remember { mutableIntStateOf(1) }
     var selectedFillLevel by remember { mutableStateOf(existingItem?.activeFill ?: FillLevel.FULL) }
 
@@ -71,138 +65,19 @@ fun EnrichmentOverlay(
     ) {
         Surface(
             modifier = Modifier
-                .widthIn(max = if (isLandscape && prototypeOption == 1) 840.dp else 580.dp)
-                .heightIn(max = if (isLandscape) 460.dp else 740.dp)
+                .widthIn(max = if (isLandscape) 840.dp else 560.dp)
+                .heightIn(max = if (isLandscape) 460.dp else 720.dp)
                 .wrapContentHeight(),
             shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                // Prototype Layout Switcher Header
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "PROTOTYPE TESTER - SELECT LAYOUT:",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            FilterChip(
-                                selected = prototypeOption == 1,
-                                onClick = { prototypeOption = 1 },
-                                label = { Text("1. Split View", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = prototypeOption == 2,
-                                onClick = { prototypeOption = 2 },
-                                label = { Text("2. Strips", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.weight(1f)
-                            )
-                            FilterChip(
-                                selected = prototypeOption == 3,
-                                onClick = { prototypeOption = 3 },
-                                label = { Text("3. Wizard", style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    when (prototypeOption) {
-                        1 -> PrototypeOption1(
-                            isLandscape = isLandscape,
-                            syncItem = syncItem,
-                            existingItem = existingItem,
-                            isExisting = isExisting,
-                            isPastItem = isPastItem,
-                            quantityToAdd = quantityToAdd,
-                            onQuantityChange = { quantityToAdd = it },
-                            selectedRow = selectedRow,
-                            selectedCol = selectedCol,
-                            onCellClick = { r, c -> selectedRow = r; selectedCol = c },
-                            onSave = { onSave(4 - selectedRow, selectedCol + 1, quantityToAdd, selectedFillLevel) },
-                            onDismiss = onDismiss
-                        )
-                        2 -> PrototypeOption2(
-                            syncItem = syncItem,
-                            existingItem = existingItem,
-                            isExisting = isExisting,
-                            isPastItem = isPastItem,
-                            quantityToAdd = quantityToAdd,
-                            onQuantityChange = { quantityToAdd = it },
-                            selectedRow = selectedRow,
-                            selectedCol = selectedCol,
-                            onRowSelect = { selectedRow = it },
-                            onColSelect = { selectedCol = it },
-                            onSave = { onSave(4 - selectedRow, selectedCol + 1, quantityToAdd, selectedFillLevel) },
-                            onDismiss = onDismiss
-                        )
-                        3 -> PrototypeOption3(
-                            step = wizardStep,
-                            onStepChange = { wizardStep = it },
-                            syncItem = syncItem,
-                            existingItem = existingItem,
-                            isExisting = isExisting,
-                            isPastItem = isPastItem,
-                            quantityToAdd = quantityToAdd,
-                            onQuantityChange = { quantityToAdd = it },
-                            selectedRow = selectedRow,
-                            selectedCol = selectedCol,
-                            onCellClick = { r, c -> selectedRow = r; selectedCol = c },
-                            onSave = { onSave(4 - selectedRow, selectedCol + 1, quantityToAdd, selectedFillLevel) },
-                            onDismiss = onDismiss
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// PROTOTYPE OPTION 1: Two-Column Split View (Landscape) / Vertical Stack (Portrait)
-@Composable
-private fun PrototypeOption1(
-    isLandscape: Boolean,
-    syncItem: SyncQueueItem,
-    existingItem: PantryItem?,
-    isExisting: Boolean,
-    isPastItem: Boolean,
-    quantityToAdd: Int,
-    onQuantityChange: (Int) -> Unit,
-    selectedRow: Int,
-    selectedCol: Int,
-    onCellClick: (Int, Int) -> Unit,
-    onSave: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    if (isLandscape) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
             Column(
                 modifier = Modifier
-                    .weight(0.48f)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Header (Title + Close Button)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -210,284 +85,113 @@ private fun PrototypeOption1(
                 ) {
                     Text(
                         text = if (isExisting) "Restock Item" else if (isPastItem) "Re-adding Past Item" else "New Item Discovery",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = if (isLandscape) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
 
-                ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = true)
+                if (isLandscape) {
+                    // LANDSCAPE: 2-Column Side-by-Side Content Area
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Left Column: Product Info & Quantity Selector
+                        Column(
+                            modifier = Modifier
+                                .weight(0.46f)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = true)
+                            QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = { quantityToAdd = it }, compact = true)
+                        }
 
-                QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = onQuantityChange, compact = true)
+                        // Right Column: Location Header & Shelf Grid
+                        Column(
+                            modifier = Modifier.weight(0.54f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            LocationLabelText(
+                                isExisting = isExisting,
+                                isPastItem = isPastItem,
+                                existingItem = existingItem,
+                                row = selectedRow,
+                                col = selectedCol
+                            )
 
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(210.dp)
+                            ) {
+                                PantryShelfGrid(
+                                    selectedCell = selectedRow to selectedCol,
+                                    onCellClick = { r, c ->
+                                        selectedRow = r
+                                        selectedCol = c
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // PORTRAIT: Single-Column Vertical Content Area
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = false)
+
+                        QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = { quantityToAdd = it }, compact = false)
+
+                        LocationLabelText(
+                            isExisting = isExisting,
+                            isPastItem = isPastItem,
+                            existingItem = existingItem,
+                            row = selectedRow,
+                            col = selectedCol
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                        ) {
+                            PantryShelfGrid(
+                                selectedCell = selectedRow to selectedCol,
+                                onCellClick = { r, c ->
+                                    selectedRow = r
+                                    selectedCol = c
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+
+                // Full-Width Primary Action Button at the Bottom
                 Button(
-                    onClick = onSave,
-                    modifier = Modifier.fillMaxWidth().height(44.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        if (isExisting) "Add to Pantry" else "Save to Pantry",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier.weight(0.52f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                LocationLabelText(isExisting = isExisting, isPastItem = isPastItem, existingItem = existingItem, row = selectedRow, col = selectedCol)
-
-                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    PantryShelfGrid(
-                        selectedCell = selectedRow to selectedCol,
-                        onCellClick = onCellClick,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-        }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (isExisting) "Restock Item" else if (isPastItem) "Re-adding Past Item" else "New Item Discovery",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
-                }
-            }
-
-            ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = false)
-
-            QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = onQuantityChange, compact = false)
-
-            LocationLabelText(isExisting = isExisting, isPastItem = isPastItem, existingItem = existingItem, row = selectedRow, col = selectedCol)
-
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
-                PantryShelfGrid(
-                    selectedCell = selectedRow to selectedCol,
-                    onCellClick = onCellClick,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Button(
-                onClick = onSave,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(14.dp)
-            ) {
-                Text(
-                    if (isExisting) "Add to Pantry" else "Save to Pantry",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    }
-}
-
-// PROTOTYPE OPTION 2: Compact Segmented Strips
-@Composable
-private fun PrototypeOption2(
-    syncItem: SyncQueueItem,
-    existingItem: PantryItem?,
-    isExisting: Boolean,
-    isPastItem: Boolean,
-    quantityToAdd: Int,
-    onQuantityChange: (Int) -> Unit,
-    selectedRow: Int,
-    selectedCol: Int,
-    onRowSelect: (Int) -> Unit,
-    onColSelect: (Int) -> Unit,
-    onSave: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Option 2: Compact Segmented Selector",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Close")
-            }
-        }
-
-        ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = true)
-
-        QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = onQuantityChange, compact = true)
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-        LocationLabelText(isExisting = isExisting, isPastItem = isPastItem, existingItem = existingItem, row = selectedRow, col = selectedCol)
-
-        // Shelf Selection Strip
-        Text("Select Shelf Level:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            listOf("S4 (Top)", "S3", "S2", "S1 (Bottom)").forEachIndexed { index, label ->
-                FilterChip(
-                    selected = selectedRow == index,
-                    onClick = { onRowSelect(index) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Zone Selection Strip
-        Text("Select Zone Area:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            listOf("Left", "Middle", "Right").forEachIndexed { index, label ->
-                FilterChip(
-                    selected = selectedCol == index,
-                    onClick = { onColSelect(index) },
-                    label = { Text(label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Button(
-            onClick = onSave,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text(
-                if (isExisting) "Add to Pantry" else "Save to Pantry",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-// PROTOTYPE OPTION 3: Two-Step Interactive Wizard
-@Composable
-private fun PrototypeOption3(
-    step: Int,
-    onStepChange: (Int) -> Unit,
-    syncItem: SyncQueueItem,
-    existingItem: PantryItem?,
-    isExisting: Boolean,
-    isPastItem: Boolean,
-    quantityToAdd: Int,
-    onQuantityChange: (Int) -> Unit,
-    selectedRow: Int,
-    selectedCol: Int,
-    onCellClick: (Int, Int) -> Unit,
-    onSave: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Option 3: Step $step of 2 - ${if (step == 1) "Quantity" else "Shelf Location"}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Close")
-            }
-        }
-
-        LinearProgressIndicator(
-            progress = { if (step == 1) 0.5f else 1.0f },
-            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
-        )
-
-        if (step == 1) {
-            // STEP 1: Product Details & Quantity
-            ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = false)
-
-            Text("How many did you buy?", style = MaterialTheme.typography.titleMedium)
-            QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = onQuantityChange, compact = false)
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = { onStepChange(2) },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Next: Choose Location", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-            }
-        } else {
-            // STEP 2: Location Grid Selection
-            LocationLabelText(isExisting = isExisting, isPastItem = isPastItem, existingItem = existingItem, row = selectedRow, col = selectedCol)
-
-            Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
-                PantryShelfGrid(
-                    selectedCell = selectedRow to selectedCol,
-                    onCellClick = onCellClick,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { onStepChange(1) },
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Back")
-                }
-
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    onClick = {
+                        val shelf = 4 - selectedRow
+                        val zone = selectedCol + 1
+                        onSave(shelf, zone, quantityToAdd, selectedFillLevel)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
                     Text(
                         if (isExisting) "Add to Pantry" else "Save to Pantry",
@@ -564,7 +268,9 @@ private fun QuantitySelectorRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
                 onClick = { if (quantity > 1) onQuantityChange(quantity - 1) },
-                modifier = Modifier.size(if (compact) 36.dp else 44.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                modifier = Modifier
+                    .size(if (compact) 36.dp else 44.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
             ) {
                 Icon(Icons.Default.Remove, contentDescription = "Decrease")
             }
@@ -576,7 +282,9 @@ private fun QuantitySelectorRow(
             )
             IconButton(
                 onClick = { onQuantityChange(quantity + 1) },
-                modifier = Modifier.size(if (compact) 36.dp else 44.dp).background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                modifier = Modifier
+                    .size(if (compact) 36.dp else 44.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Increase")
             }
