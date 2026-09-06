@@ -106,7 +106,7 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val mappedTrackingType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
     val rawFill = activeFill.ifBlank { "FULL" }
 
-    val effectiveIsAssigned = isAssigned ?: false
+    val effectiveIsAssigned = isAssigned ?: true
 
     val hostedUrlFromImageFile = if (!id.isNullOrBlank() && !image.isNullOrBlank()) {
         "https://pantry.lockpc.co.uk/api/files/pantry_items/$id/$image"

@@ -51,9 +51,19 @@ fun DashboardScreen(
         }
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.probeMessage) {
+        uiState.probeMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            viewModel.clearProbeMessage()
+        }
+    }
+
     Scaffold(
         topBar = {
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -129,7 +139,7 @@ fun DashboardLayout(
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         val displayedItems = remember(pantryItems) {
             pantryItems
-                .filter { it.isAssigned && it.hasStock }
+                .filter { it.hasStock }
                 .sortedWith(
                     compareByDescending<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }

@@ -6,6 +6,7 @@ import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
 import com.pantry.organiser.dashboard.data.PantryRepository
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.data.SyncQueueRepository
@@ -21,13 +22,16 @@ data class DashboardUiState(
     val pantryItems: List<PantryItem> = emptyList(),
     val activeOverlay: OverlayContext? = null,
     val pantryId: String = "default-pantry",
-    val isSaving: Boolean = false
+    val isSaving: Boolean = false,
+    val isProbing: Boolean = false,
+    val probeMessage: String? = null
 )
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val syncQueueRepository: SyncQueueRepository,
-    private val pantryRepository: PantryRepository
+    private val pantryRepository: PantryRepository,
+    private val openFoodFactsProber: OpenFoodFactsProber
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -39,35 +43,14 @@ class DashboardViewModel @Inject constructor(
                 syncQueueRepository.getPendingItems(),
                 pantryRepository.allItems
             ) { pending, items ->
-                val unassignedPantryItems = items.filter { !it.isAssigned && it.hasStock }
-                val pendingItemIds = pending.map { it.itemId }.toSet()
-                val pendingBarcodes = pending.map { it.barcode }.filter { it.isNotBlank() }.toSet()
-
-                val additionalPending = unassignedPantryItems.filter {
-                    it.id !in pendingItemIds && (it.barcode.isNullOrBlank() || it.barcode !in pendingBarcodes)
-                }.map { item ->
-                    SyncQueueItem(
-                        id = "unassigned_${item.id}",
-                        itemId = item.id,
-                        barcode = item.barcode ?: "",
-                        scannedAt = item.createdAt,
-                        batchId = "unassigned_batch",
-                        productName = item.name.ifBlank { "Unknown Product" },
-                        brand = item.brand ?: "",
-                        imageUrl = item.imageUrl ?: item.apiImageUrl ?: "",
-                        quantity = item.packageQuantity ?: ""
-                    )
-                }
-
-                val allPending = pending + additionalPending
                 val sortedItems = items.sortedWith(
                     compareByDescending<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }
                         .thenBy { it.name }
                 )
-                _uiState.update { it.copy(pendingItems = allPending, pantryItems = sortedItems) }
+                _uiState.update { it.copy(pendingItems = pending, pantryItems = sortedItems) }
 
-                if (allPending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
+                if (pending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
                     _uiState.update { it.copy(activeOverlay = null) }
                 }
             }.collect()
@@ -227,7 +210,7 @@ class DashboardViewModel @Inject constructor(
                 pantryRepository.addItem(itemToSave)
             }
 
-            if (syncItem.itemId.isNotBlank() && syncItem.itemId != itemToSave.id) {
+            if (existingItem != null && syncItem.itemId.isNotBlank() && syncItem.itemId != existingItem.id) {
                 pantryRepository.deleteItem(PantryItem(id = syncItem.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
             }
 
@@ -376,9 +359,6 @@ class DashboardViewModel @Inject constructor(
 
     fun clearPendingItem(item: SyncQueueItem) {
         viewModelScope.launch {
-            if (item.itemId.isNotBlank()) {
-                pantryRepository.deleteItem(PantryItem(id = item.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
-            }
             syncQueueRepository.clearPendingItem(item)
             _uiState.update { state ->
                 state.copy(pendingItems = state.pendingItems.filter { it.id != item.id })
@@ -388,12 +368,6 @@ class DashboardViewModel @Inject constructor(
 
     fun clearAllPendingItems() {
         viewModelScope.launch {
-            val pending = _uiState.value.pendingItems
-            pending.forEach { item ->
-                if (item.itemId.isNotBlank()) {
-                    pantryRepository.deleteItem(PantryItem(id = item.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
-                }
-            }
             syncQueueRepository.clearAllPendingItems()
             _uiState.update { it.copy(pendingItems = emptyList()) }
         }
@@ -401,5 +375,23 @@ class DashboardViewModel @Inject constructor(
 
     fun dismissOverlay() {
         _uiState.update { it.copy(activeOverlay = null) }
+    }
+
+    fun probeOpenFoodFacts() {
+        if (_uiState.value.isProbing) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isProbing = true) }
+            val updatedCount = openFoodFactsProber.probeAndSync()
+            val msg = if (updatedCount > 0) {
+                "Probed Open Food Facts: $updatedCount item(s) updated."
+            } else {
+                "Probed Open Food Facts: All items are up to date."
+            }
+            _uiState.update { it.copy(isProbing = false, probeMessage = msg) }
+        }
+    }
+
+    fun clearProbeMessage() {
+        _uiState.update { it.copy(probeMessage = null) }
     }
 }

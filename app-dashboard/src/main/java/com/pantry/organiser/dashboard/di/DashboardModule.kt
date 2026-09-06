@@ -17,6 +17,8 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.header
+import io.ktor.http.HttpHeaders
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 import javax.inject.Singleton
@@ -50,6 +52,9 @@ object DashboardModule {
         }
         install(HttpRedirect) {
             checkHttpMethod = false
+        }
+        install(DefaultRequest) {
+            header(HttpHeaders.UserAgent, "VisualPantry/1.1 (Android; support@visualpantry.organiser.com)")
         }
     }
 

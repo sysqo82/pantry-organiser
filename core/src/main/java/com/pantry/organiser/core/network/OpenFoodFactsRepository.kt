@@ -1,19 +1,15 @@
 package com.pantry.organiser.core.network
 
+import android.util.Log
 import com.pantry.organiser.core.model.PantryConstants
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
-import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 @Serializable
 data class OffResponse(
@@ -42,42 +38,69 @@ data class OffProduct(
 }
 
 class OpenFoodFactsRepository(private val client: HttpClient) {
-    
-    suspend fun getProduct(barcode: String): OffProduct? = coroutineScope {
+
+    suspend fun getProduct(barcode: String): OffProduct? {
         val trimmed = barcode.trim()
-        val codes = mutableSetOf(trimmed)
-        
+        if (trimmed.isBlank()) return null
+
+        val codes = mutableListOf(trimmed)
+
         // UPC-A / EAN-13 Normalization
         if (trimmed.length == 12) {
             codes.add("0$trimmed")
         } else if (trimmed.length == 13 && trimmed.startsWith("0")) {
             codes.add(trimmed.substring(1))
         }
-        
-        android.util.Log.d("OFF", "Starting parallel fetch for codes: $codes")
-        
-        val deferreds = codes.map { code ->
-            async {
-                val url = "https://world.openfoodfacts.org/api/v2/product/$code.json"
-                try {
-                    val response: OffResponse = client.get(url) {
-                        parameter("fields", "product_name,product_name_en,generic_name,brands,brand_owner,quantity,image_front_small_url,categories_tags")
-                    }.body()
-                    
-                    if (response.status == 1 && response.product != null) {
-                        android.util.Log.d("OFF", "Success for: $code")
-                        response.product 
-                    } else {
-                        android.util.Log.d("OFF", "Not found: $code (Status: ${response.status})")
-                        null
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("OFF", "Network error for $code: ${e.message}")
-                    null
+
+        for (code in codes) {
+            val product = fetchProductWithRetry(code)
+            if (product != null) return product
+        }
+        return null
+    }
+
+    private suspend fun fetchProductWithRetry(code: String, maxRetries: Int = 3): OffProduct? {
+        var currentDelay = 1000L
+        for (attempt in 0..maxRetries) {
+            val url = "https://world.openfoodfacts.org/api/v2/product/$code.json"
+            try {
+                val httpResponse = client.get(url) {
+                    header(HttpHeaders.UserAgent, "VisualPantry/1.1 (Android; support@visualpantry.organiser.com)")
+                    parameter("fields", "product_name,product_name_en,generic_name,brands,brand_owner,quantity,image_front_small_url,categories_tags")
                 }
+
+                if (httpResponse.status == HttpStatusCode.TooManyRequests) {
+                    Log.w("OFF", "Rate limited (429) for $code. Attempt ${attempt + 1}, backing off for ${currentDelay}ms")
+                    delay(currentDelay)
+                    currentDelay *= 2
+                    continue
+                }
+
+                if (httpResponse.status == HttpStatusCode.OK) {
+                    val response: OffResponse = httpResponse.body()
+                    if (response.status == 1 && response.product != null) {
+                        Log.d("OFF", "Success for: $code")
+                        return response.product
+                    } else {
+                        Log.d("OFF", "Not found: $code (Status: ${response.status})")
+                        return null
+                    }
+                }
+            } catch (e: ClientRequestException) {
+                if (e.response.status == HttpStatusCode.TooManyRequests) {
+                    Log.w("OFF", "ClientRequestException 429 for $code. Attempt ${attempt + 1}, backing off for ${currentDelay}ms")
+                    delay(currentDelay)
+                    currentDelay *= 2
+                    continue
+                } else {
+                    Log.e("OFF", "HTTP error for $code: ${e.message}")
+                    return null
+                }
+            } catch (e: Exception) {
+                Log.e("OFF", "Network error for $code: ${e.message}")
+                return null
             }
         }
-        
-        deferreds.awaitAll().firstOrNull { it != null }
+        return null
     }
 }
