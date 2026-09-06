@@ -18,6 +18,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import android.util.Log
+import com.pantry.organiser.core.model.PastItem
 
 class PocketBaseSyncServiceTest {
     
@@ -101,5 +102,38 @@ class PocketBaseSyncServiceTest {
             assert(subscriptionCaptured)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `createPastItem sends past item payload to past_items endpoint`() = runTest {
+        var capturedPath: String? = null
+        var capturedMethod: HttpMethod? = null
+        val mockEngine = MockEngine { request ->
+            capturedPath = request.url.encodedPath
+            capturedMethod = request.method
+            respond(
+                content = """{"id":"past_1","name":"Soy Sauce","barcode":"5012345678901"}""",
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) { json() }
+            install(HttpTimeout)
+        }
+        val service = PocketBaseSyncService(client, baseUrl)
+
+        val pastItem = PastItem(
+            id = "past_1",
+            name = "Soy Sauce",
+            barcode = "5012345678901"
+        )
+
+        val result = service.createPastItem(pastItem)
+
+        assertNotNull(result)
+        assertEquals("past_1", result?.id)
+        assertEquals("/api/collections/past_items/records", capturedPath)
+        assertEquals(HttpMethod.Post, capturedMethod)
     }
 }

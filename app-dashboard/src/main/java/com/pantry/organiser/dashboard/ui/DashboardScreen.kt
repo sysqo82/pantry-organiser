@@ -90,8 +90,10 @@ fun DashboardScreen(
                 EnrichmentOverlay(
                     syncItem = overlay.syncItem,
                     existingItem = overlay.existingItem,
+                    isPastItem = overlay.isPastItem,
+                    suggestedShelf = overlay.suggestedShelf,
                     onSave = { shelf, zone, qty, fill ->
-                        viewModel.saveEnrichedItem(overlay.syncItem, overlay.existingItem, shelf, zone, qty, fill)
+                        viewModel.saveEnrichedItem(overlay.syncItem, overlay.existingItem, shelf, zone, qty, fill, overlay.isPastItem)
                     },
                     onDismiss = { viewModel.dismissOverlay() }
                 )

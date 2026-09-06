@@ -1,6 +1,7 @@
 package com.pantry.organiser.dashboard.data
 
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.PantryTypeConverters
 import android.content.Context
 import androidx.room.Database
@@ -10,11 +11,12 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PantryItem::class, SyncQueueItem::class], version = 5, exportSchema = false)
+@Database(entities = [PantryItem::class, SyncQueueItem::class, PastItem::class], version = 6, exportSchema = false)
 @TypeConverters(PantryTypeConverters::class)
 abstract class PantryDatabase : RoomDatabase() {
     abstract fun pantryDao(): PantryDao
     abstract fun syncQueueDao(): SyncQueueDao
+    abstract fun pastItemDao(): PastItemDao
     companion object {
         @Volatile private var INSTANCE: PantryDatabase? = null
 

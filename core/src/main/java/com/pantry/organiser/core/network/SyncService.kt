@@ -2,6 +2,7 @@ package com.pantry.organiser.core.network
 
 import com.pantry.organiser.core.model.BatchPayload
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import kotlinx.coroutines.flow.Flow
 
 interface SyncService {
@@ -17,4 +18,9 @@ interface SyncService {
     suspend fun updatePantryItem(item: PantryItem): PantryItem?
     suspend fun deletePantryItem(itemId: String): Boolean
     suspend fun uploadPantryItemImage(itemId: String, imageBytes: ByteArray, filename: String = "product.jpg"): PantryItem?
+
+    // Past Items Sync
+    suspend fun fetchPastItems(pantryId: String = "default-pantry"): List<PastItem>
+    suspend fun createPastItem(item: PastItem): PastItem?
+    suspend fun deletePastItem(itemId: String): Boolean
 }

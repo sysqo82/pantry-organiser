@@ -3,6 +3,7 @@ package com.pantry.organiser.core.network
 import android.util.Log
 import com.pantry.organiser.core.model.BatchPayload
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.plugins.*
@@ -353,6 +354,71 @@ class PocketBaseSyncService(
     override suspend fun deletePantryItem(itemId: String): Boolean = writeMutex.withLock {
         if (itemId.isEmpty() || itemId.startsWith("local_")) return true
         val url = "$baseUrl/api/collections/pantry_items/records/$itemId"
+        for (attempt in 1..3) {
+            try {
+                val success = client.delete(url).status.isSuccess()
+                if (success) {
+                    delay(250)
+                    return true
+                }
+            } catch (e: Exception) {
+                if (attempt < 3) delay(300L * attempt)
+            }
+        }
+        return false
+    }
+
+    override suspend fun fetchPastItems(pantryId: String): List<PastItem> {
+        val url = "$baseUrl/api/collections/past_items/records"
+        return try {
+            val response = client.get(url) {
+                parameter("perPage", 500)
+            }
+            if (!response.status.isSuccess()) {
+                val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+                Log.e("PocketBaseSync", "Failed to fetch past_items (${response.status}): $errorBody")
+                return emptyList()
+            }
+            val pbList: PocketBaseListResponse<PocketBasePantryItem> = response.body()
+            pbList.items.map { it.toPastLocal() }
+        } catch (e: Exception) {
+            Log.e("PocketBaseSync", "Failed to fetch past_items: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    override suspend fun createPastItem(item: PastItem): PastItem? = writeMutex.withLock {
+        val url = "$baseUrl/api/collections/past_items/records"
+        val pbItem = item.toPocketBase()
+        val jsonBody = json.encodeToString(PocketBasePantryItem.serializer(), pbItem)
+        var lastException: Exception? = null
+
+        for (attempt in 1..3) {
+            try {
+                Log.d("PocketBaseSync", "Creating past_item (Attempt $attempt/3) with body: $jsonBody")
+                val httpResponse = client.post(url) {
+                    contentType(ContentType.Application.Json)
+                    setBody(jsonBody)
+                }
+                val responseText = httpResponse.bodyAsText()
+                if (httpResponse.status.isSuccess()) {
+                    val response: PocketBasePantryItem = json.decodeFromString(responseText)
+                    val createdLocal = response.toPastLocal()
+                    delay(250)
+                    return createdLocal
+                }
+            } catch (e: Exception) {
+                lastException = e
+                if (attempt < 3) delay(300L * attempt)
+            }
+        }
+        Log.e("PocketBaseSync", "Failed all 3 attempts to create past_item: ${item.name}", lastException)
+        return null
+    }
+
+    override suspend fun deletePastItem(itemId: String): Boolean = writeMutex.withLock {
+        if (itemId.isEmpty() || itemId.startsWith("local_")) return true
+        val url = "$baseUrl/api/collections/past_items/records/$itemId"
         for (attempt in 1..3) {
             try {
                 val success = client.delete(url).status.isSuccess()

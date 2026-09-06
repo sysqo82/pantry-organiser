@@ -7,6 +7,7 @@ import com.pantry.organiser.core.network.PocketBaseSyncService
 import com.pantry.organiser.core.network.SyncService
 import com.pantry.organiser.dashboard.data.PantryDao
 import com.pantry.organiser.dashboard.data.PantryDatabase
+import com.pantry.organiser.dashboard.data.PastItemDao
 import com.pantry.organiser.dashboard.data.SyncQueueDao
 import dagger.Module
 import dagger.Provides
@@ -81,4 +82,7 @@ object DashboardModule {
 
     @Provides
     fun provideSyncQueueDao(database: PantryDatabase): SyncQueueDao = database.syncQueueDao()
+
+    @Provides
+    fun providePastItemDao(database: PantryDatabase): PastItemDao = database.pastItemDao()
 }

@@ -2,6 +2,8 @@ package com.pantry.organiser.dashboard.data
 
 import android.util.Log
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
+import com.pantry.organiser.core.model.toPastItem
 import com.pantry.organiser.core.network.SyncService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +18,7 @@ import javax.inject.Singleton
 @Singleton
 class PantryRepository @Inject constructor(
     private val pantryDao: PantryDao,
+    private val pastItemDao: PastItemDao,
     private val syncService: SyncService
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -88,6 +91,11 @@ class PantryRepository @Inject constructor(
 
                     pantryDao.insertItems(remoteItems)
                 }
+
+                val remotePastItems = try { syncService.fetchPastItems() } catch (e: Exception) { emptyList() }
+                if (remotePastItems.isNotEmpty()) {
+                    pastItemDao.insertPastItems(remotePastItems)
+                }
             } catch (e: Exception) {
                 Log.e("PantryRepo", "Failed reconciliation of pantry_items: ${e.message}")
             }
@@ -101,6 +109,9 @@ class PantryRepository @Inject constructor(
                 if (remoteItem.sealedCount < 0) {
                     pantryDao.deleteItem(remoteItem)
                 } else {
+                    remoteItem.barcode?.takeIf { it.isNotBlank() }?.let { barcode ->
+                        pantryDao.deleteLocalItemsByBarcode(barcode)
+                    }
                     pantryDao.insertItem(remoteItem)
                 }
             }
@@ -123,10 +134,14 @@ class PantryRepository @Inject constructor(
         } else item
 
         pantryDao.insertItem(safeItem)
+        safeItem.barcode?.let { removeFromPastItems(it) }
         scope.launch {
             val created = syncService.createPantryItem(safeItem)
             if (created != null && created.id != safeItem.id) {
                 pantryDao.deleteItem(safeItem)
+                safeItem.barcode?.takeIf { it.isNotBlank() }?.let { barcode ->
+                    pantryDao.deleteLocalItemsByBarcode(barcode)
+                }
                 pantryDao.insertItem(created)
             }
         }
@@ -134,6 +149,7 @@ class PantryRepository @Inject constructor(
 
     suspend fun updateItem(item: PantryItem) {
         pantryDao.updateItem(item)
+        item.barcode?.let { removeFromPastItems(it) }
         scope.launch {
             val updated = syncService.updatePantryItem(item)
             if (updated != null && updated.id != item.id) {
@@ -150,7 +166,61 @@ class PantryRepository @Inject constructor(
         }
     }
 
+    suspend fun moveToPastItems(item: PantryItem) {
+        pantryDao.deleteItem(item)
+        val pastItem = item.toPastItem().copy(
+            isAssigned = false,
+            updatedAt = System.currentTimeMillis()
+        )
+        pastItemDao.insertPastItem(pastItem)
+        scope.launch {
+            syncService.deletePantryItem(item.id)
+
+            // Delete any existing duplicate past items on server before creating new past item
+            item.barcode?.takeIf { it.isNotBlank() }?.let { bc ->
+                try {
+                    val remotePastItems = syncService.fetchPastItems()
+                    remotePastItems.filter { it.barcode == bc }.forEach { existing ->
+                        syncService.deletePastItem(existing.id)
+                    }
+                } catch (_: Exception) {}
+            }
+
+            val createdPast = syncService.createPastItem(pastItem)
+            if (createdPast != null && createdPast.id != pastItem.id) {
+                pastItemDao.deletePastItem(pastItem)
+                pastItemDao.insertPastItem(createdPast)
+            }
+        }
+    }
+
     suspend fun getItemByBarcode(barcode: String): PantryItem? {
         return pantryDao.getItemByBarcode(barcode)
+    }
+
+    suspend fun getPastItemByBarcode(barcode: String): PastItem? {
+        if (barcode.isBlank()) return null
+        return pastItemDao.getPastItemByBarcode(barcode)
+    }
+
+    suspend fun removeFromPastItems(barcode: String) {
+        if (barcode.isBlank()) return
+        val existingPastItem = pastItemDao.getPastItemByBarcode(barcode)
+        pastItemDao.deletePastItemByBarcode(barcode)
+        scope.launch {
+            if (existingPastItem != null && existingPastItem.id.isNotBlank() && !existingPastItem.id.startsWith("local_")) {
+                syncService.deletePastItem(existingPastItem.id)
+            }
+            try {
+                val remotePastItems = syncService.fetchPastItems()
+                remotePastItems.filter { it.barcode == barcode }.forEach { remote ->
+                    if (remote.id.isNotBlank() && !remote.id.startsWith("local_")) {
+                        syncService.deletePastItem(remote.id)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PantryRepo", "Failed cleaning remote past item for $barcode: ${e.message}")
+            }
+        }
     }
 }

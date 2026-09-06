@@ -64,4 +64,47 @@ class PantryItemTest {
         assertEquals(TrackingType.DISCRETE_COUNT, giantCouscous)
         assertEquals(TrackingType.DISCRETE_COUNT, israeliCouscous)
     }
+
+    @Test
+    fun `conversion between PantryItem and PastItem preserves all fields`() {
+        val originalPantryItem = PantryItem(
+            id = "item_123",
+            name = "Kikkoman Soy Sauce",
+            barcode = "5012345678901",
+            brand = "Kikkoman",
+            packageQuantity = "250ml",
+            imageUrl = "http://example.com/custom.jpg",
+            apiImageUrl = "http://example.com/api.jpg",
+            localImageUrl = "http://example.com/local.jpg",
+            localImageUri = "content://media/123",
+            shelfNumber = 4,
+            zoneIndex = 3,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            sealedCount = 2,
+            unitsPerPack = 1,
+            activeCount = 1,
+            activeFill = FillLevel.FULL,
+            isAssigned = true,
+            createdAt = 1000L,
+            updatedAt = 2000L
+        )
+
+        val pastItem = originalPantryItem.toPastItem()
+        assertEquals(originalPantryItem.id, pastItem.id)
+        assertEquals(originalPantryItem.name, pastItem.name)
+        assertEquals(originalPantryItem.barcode, pastItem.barcode)
+        assertEquals(originalPantryItem.brand, pastItem.brand)
+        assertEquals(originalPantryItem.packageQuantity, pastItem.packageQuantity)
+        assertEquals(originalPantryItem.imageUrl, pastItem.imageUrl)
+        assertEquals(originalPantryItem.apiImageUrl, pastItem.apiImageUrl)
+        assertEquals(originalPantryItem.localImageUrl, pastItem.localImageUrl)
+        assertEquals(originalPantryItem.localImageUri, pastItem.localImageUri)
+        assertEquals(originalPantryItem.shelfNumber, pastItem.shelfNumber)
+        assertEquals(originalPantryItem.zoneIndex, pastItem.zoneIndex)
+        assertEquals(originalPantryItem.trackingType, pastItem.trackingType)
+        assertEquals(originalPantryItem.sealedCount, pastItem.sealedCount)
+
+        val restoredPantryItem = pastItem.toPantryItem()
+        assertEquals(originalPantryItem, restoredPantryItem)
+    }
 }

@@ -3,7 +3,10 @@ package com.pantry.organiser.core.network
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.model.toPantryItem
+import com.pantry.organiser.core.model.toPastItem
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -141,4 +144,12 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         activeFill = try { FillLevel.valueOf(rawFill) } catch (e: Exception) { FillLevel.FULL },
         isAssigned = effectiveIsAssigned
     )
+}
+
+fun PastItem.toPocketBase(): PocketBasePantryItem {
+    return toPantryItem().toPocketBase()
+}
+
+fun PocketBasePantryItem.toPastLocal(): PastItem {
+    return toLocal().toPastItem()
 }

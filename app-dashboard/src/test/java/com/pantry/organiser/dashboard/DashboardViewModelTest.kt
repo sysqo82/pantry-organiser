@@ -2,6 +2,7 @@ package com.pantry.organiser.dashboard
 
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
 import com.pantry.organiser.dashboard.data.PantryRepository
@@ -216,7 +217,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `consumeItem on empty bulk item with no reserve deletes item`() = runTest {
+    fun `consumeItem on empty bulk item with no reserve moves item to past items`() = runTest {
         val bulkItem = PantryItem(
             id = "salt_1",
             name = "British Cooking Salt",
@@ -228,7 +229,7 @@ class DashboardViewModelTest {
         )
 
         val slot = slot<PantryItem>()
-        coEvery { pantryRepository.deleteItem(capture(slot)) } returns Unit
+        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
 
         viewModel.consumeItem(bulkItem)
 
@@ -590,5 +591,124 @@ class DashboardViewModelTest {
 
         coVerify(exactly = 1) { syncQueueRepository.clearAllPendingItems() }
         coVerify(exactly = 0) { pantryRepository.deleteItem(any()) }
+    }
+
+    @Test
+    fun `processItem when item not active but in past_items suggests last location and sets isPastItem true`() = runTest {
+        val pastItem = PastItem(
+            id = "past_soy_sauce",
+            name = "Kikkoman Soy Sauce",
+            barcode = "5012345678901",
+            brand = "Kikkoman",
+            packageQuantity = "250ml",
+            shelfNumber = 4,
+            zoneIndex = 2, // Shelf 4, Zone 2 -> Row 0, Col 1 (S4-M)
+            trackingType = TrackingType.DISCRETE_COUNT,
+            sealedCount = 1,
+            isAssigned = true
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "sq_soy_1",
+            itemId = "unassigned_placeholder_1",
+            barcode = "5012345678901",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Kikkoman Soy Sauce"
+        )
+
+        val unassignedPantryItem = PantryItem(
+            id = "unassigned_placeholder_1",
+            name = "Kikkoman Soy Sauce",
+            barcode = "5012345678901",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            isAssigned = false
+        )
+
+        every { pantryRepository.allItems } returns flowOf(listOf(unassignedPantryItem))
+        coEvery { pantryRepository.getItemByBarcode("5012345678901") } returns unassignedPantryItem
+        coEvery { pantryRepository.getPastItemByBarcode("5012345678901") } returns pastItem
+
+        viewModel.processItem(syncItem)
+
+        val overlay = viewModel.uiState.value.activeOverlay
+        assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
+        val enrichment = overlay as OverlayContext.SyncQueueEnrichment
+        assertTrue(enrichment.isPastItem)
+        assertEquals("Kikkoman Soy Sauce", enrichment.existingItem?.name)
+        assertEquals(0 to 1, enrichment.suggestedShelf) // Shelf 4, Zone 2 -> Row 0, Col 1 (S4-M)
+    }
+
+    @Test
+    fun `consumeItem when count reaches 0 moves item to past_items`() = runTest {
+        val discreteItem = PantryItem(
+            id = "soy_sauce_1",
+            name = "Kikkoman Soy Sauce",
+            barcode = "5012345678901",
+            shelfNumber = 4,
+            zoneIndex = 3,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            sealedCount = 1,
+            isAssigned = true
+        )
+
+        val slot = slot<PantryItem>()
+        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
+
+        viewModel.consumeItem(discreteItem, 1)
+
+        val moved = slot.captured
+        assertEquals("soy_sauce_1", moved.id)
+        assertEquals("Kikkoman Soy Sauce", moved.name)
+        assertEquals("5012345678901", moved.barcode)
+    }
+
+    @Test
+    fun `saveEnrichedItem when re-adding past item calls addItem to insert into pantry_items`() = runTest {
+        val pastAsPantry = PantryItem(
+            id = "past_soy_sauce_1",
+            name = "Kikkoman Soy Sauce",
+            barcode = "5012345678901",
+            brand = "Kikkoman",
+            packageQuantity = "250ml",
+            shelfNumber = 4,
+            zoneIndex = 2,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 1,
+            sealedCount = 0,
+            isAssigned = false // Unassigned past item template!
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "sq_soy_1",
+            barcode = "5012345678901",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Kikkoman Soy Sauce"
+        )
+
+        val addSlot = slot<PantryItem>()
+        coEvery { pantryRepository.addItem(capture(addSlot)) } returns Unit
+
+        viewModel.saveEnrichedItem(
+            syncItem = syncItem,
+            existingItem = pastAsPantry,
+            shelf = 4,
+            zone = 2,
+            quantityToAdd = 1,
+            fillLevel = FillLevel.FULL,
+            isPastItem = true
+        )
+
+        coVerify(exactly = 1) { pantryRepository.addItem(any()) }
+        coVerify(exactly = 0) { pantryRepository.updateItem(any()) }
+
+        val saved = addSlot.captured
+        assertTrue(saved.isAssigned)
+        assertEquals("Kikkoman Soy Sauce", saved.name)
+        assertEquals("5012345678901", saved.barcode)
+        assertEquals(4, saved.shelfNumber)
+        assertEquals(2, saved.zoneIndex)
     }
 }

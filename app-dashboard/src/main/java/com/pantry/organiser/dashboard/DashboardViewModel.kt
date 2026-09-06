@@ -6,6 +6,7 @@ import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.model.toPantryItem
 import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
 import com.pantry.organiser.dashboard.data.PantryRepository
 import com.pantry.organiser.dashboard.data.SyncQueueItem
@@ -76,11 +77,50 @@ class DashboardViewModel @Inject constructor(
                     ?: pantryRepository.getItemByBarcode(item.barcode)?.takeIf { it.isAssigned }
             } else null
 
-            val existingItem = assignedMatch
-                ?: (if (item.itemId.isNotBlank()) allItems.find { it.id == item.itemId } else null)
-                ?: pantryRepository.getItemByBarcode(item.barcode)
+            val activeExistingItem = assignedMatch
+                ?: (if (item.itemId.isNotBlank()) allItems.find { it.id == item.itemId && it.isAssigned } else null)
 
-            _uiState.update { it.copy(activeOverlay = OverlayContext.SyncQueueEnrichment(item, existingItem)) }
+            if (activeExistingItem != null) {
+                _uiState.update { 
+                    it.copy(
+                        activeOverlay = OverlayContext.SyncQueueEnrichment(
+                            syncItem = item, 
+                            existingItem = activeExistingItem,
+                            isPastItem = false
+                        )
+                    ) 
+                }
+            } else {
+                val pastItem = if (item.barcode.isNotBlank()) {
+                    pantryRepository.getPastItemByBarcode(item.barcode)
+                } else null
+
+                if (pastItem != null) {
+                    val pastAsPantry = pastItem.toPantryItem().copy(isAssigned = false)
+                    val suggestedRow = 4 - pastItem.shelfNumber
+                    val suggestedCol = pastItem.zoneIndex - 1
+                    _uiState.update {
+                        it.copy(
+                            activeOverlay = OverlayContext.SyncQueueEnrichment(
+                                syncItem = item,
+                                existingItem = pastAsPantry,
+                                isPastItem = true,
+                                suggestedShelf = suggestedRow to suggestedCol
+                            )
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            activeOverlay = OverlayContext.SyncQueueEnrichment(
+                                syncItem = item,
+                                existingItem = null,
+                                isPastItem = false
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
 
@@ -94,7 +134,8 @@ class DashboardViewModel @Inject constructor(
         shelf: Int,
         zone: Int,
         quantityToAdd: Int,
-        fillLevel: FillLevel
+        fillLevel: FillLevel,
+        isPastItem: Boolean = false
     ) {
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
@@ -106,7 +147,7 @@ class DashboardViewModel @Inject constructor(
                 unitsPerPack = inferredUnits
             )
 
-            val itemToSave = if (existingItem != null && existingItem.isAssigned) {
+            val itemToSave = if (existingItem != null && existingItem.isAssigned && !isPastItem) {
                 val updatedType = determinedType
                 val updatedUnits = if (inferredUnits > 1) inferredUnits else existingItem.unitsPerPack
 
@@ -166,9 +207,13 @@ class DashboardViewModel @Inject constructor(
                     maxOf(0, quantityToAdd - 1)
                 }
 
-                val targetId = existingItem?.id?.takeIf { it.isNotBlank() }
-                    ?: syncItem.itemId.takeIf { it.isNotBlank() }
-                    ?: ("local_" + UUID.randomUUID().toString())
+                val targetId = if (isPastItem) {
+                    "local_" + UUID.randomUUID().toString()
+                } else {
+                    existingItem?.id?.takeIf { it.isNotBlank() && !it.startsWith("local_") && !it.startsWith("past_") }
+                        ?: syncItem.itemId.takeIf { it.isNotBlank() && !it.startsWith("local_") }
+                        ?: ("local_" + UUID.randomUUID().toString())
+                }
 
                 val effectiveName = existingItem?.name?.takeIf { 
                     it.isNotBlank() && it != "Unknown Product" && it != "Unnamed Item" && it != "Network Error" && it != "Enriching..." 
@@ -204,7 +249,7 @@ class DashboardViewModel @Inject constructor(
                 )
             }
 
-            if (existingItem != null) {
+            if (existingItem != null && !isPastItem) {
                 pantryRepository.updateItem(itemToSave)
             } else {
                 pantryRepository.addItem(itemToSave)
@@ -241,7 +286,7 @@ class DashboardViewModel @Inject constructor(
                 val totalUnits = (item.sealedCount * item.unitsPerPack) + item.activeCount
                 val remainingUnits = totalUnits - amount
                 if (remainingUnits <= 0) {
-                    pantryRepository.deleteItem(item)
+                    pantryRepository.moveToPastItems(item)
                     updateOverlayIfShowing(null)
                 } else {
                     val newActiveCount = if (remainingUnits % item.unitsPerPack != 0) remainingUnits % item.unitsPerPack else item.unitsPerPack
@@ -265,7 +310,7 @@ class DashboardViewModel @Inject constructor(
                         pantryRepository.updateItem(updated)
                         updateOverlayIfShowing(updated)
                     } else {
-                        pantryRepository.deleteItem(item)
+                        pantryRepository.moveToPastItems(item)
                         updateOverlayIfShowing(null)
                     }
                 } else {
@@ -290,7 +335,7 @@ class DashboardViewModel @Inject constructor(
             } else if (item.trackingType == TrackingType.DISCRETE_COUNT) {
                 val newCount = item.sealedCount - amount
                 if (newCount <= 0) {
-                    pantryRepository.deleteItem(item)
+                    pantryRepository.moveToPastItems(item)
                     updateOverlayIfShowing(null)
                 } else {
                     val updated = item.copy(sealedCount = newCount, updatedAt = System.currentTimeMillis())
@@ -352,7 +397,7 @@ class DashboardViewModel @Inject constructor(
 
     fun deleteItem(item: PantryItem) {
         viewModelScope.launch {
-            pantryRepository.deleteItem(item)
+            pantryRepository.moveToPastItems(item)
             _uiState.update { it.copy(activeOverlay = null) }
         }
     }

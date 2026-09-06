@@ -30,6 +30,9 @@ interface PantryDao {
     @Delete
     suspend fun deleteItem(item: PantryItem)
 
+    @Query("DELETE FROM pantry_items WHERE id LIKE 'local_%' AND barcode = :barcode")
+    suspend fun deleteLocalItemsByBarcode(barcode: String)
+
     @Query("DELETE FROM pantry_items WHERE id = :id OR (:id = '' AND barcode = :barcode)")
     suspend fun deleteByIdOrBarcode(id: String, barcode: String? = null)
 

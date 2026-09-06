@@ -6,7 +6,9 @@ import com.pantry.organiser.dashboard.data.SyncQueueItem
 sealed class OverlayContext {
     data class SyncQueueEnrichment(
         val syncItem: SyncQueueItem,
-        val existingItem: PantryItem? = null
+        val existingItem: PantryItem? = null,
+        val isPastItem: Boolean = false,
+        val suggestedShelf: Pair<Int, Int>? = null
     ) : OverlayContext()
     
     data class ManualEntry(val shelf: Int, val zone: Int) : OverlayContext()

@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.dashboard.data.SyncQueueItem
@@ -32,15 +33,25 @@ import com.pantry.organiser.dashboard.data.SyncQueueItem
 fun EnrichmentOverlay(
     syncItem: SyncQueueItem,
     existingItem: PantryItem?,
+    isPastItem: Boolean = false,
+    suggestedShelf: Pair<Int, Int>? = null,
     onSave: (Int, Int, Int, FillLevel) -> Unit,
     onDismiss: () -> Unit
 ) {
     var quantityToAdd by remember { mutableIntStateOf(1) }
     var selectedFillLevel by remember { mutableStateOf(existingItem?.activeFill ?: FillLevel.FULL) }
-    var selectedRow by remember { mutableIntStateOf(existingItem?.shelfNumber?.let { 4 - it } ?: 0) }
-    var selectedCol by remember { mutableIntStateOf(existingItem?.zoneIndex?.let { it - 1 } ?: 1) }
+    
+    val defaultRow = suggestedShelf?.first 
+        ?: existingItem?.shelfNumber?.let { 4 - it } 
+        ?: 0
+    val defaultCol = suggestedShelf?.second 
+        ?: existingItem?.zoneIndex?.let { it - 1 } 
+        ?: 1
 
-    val isExisting = existingItem != null
+    var selectedRow by remember { mutableIntStateOf(defaultRow) }
+    var selectedCol by remember { mutableIntStateOf(defaultCol) }
+
+    val isExisting = existingItem != null && !isPastItem
 
     Box(
         modifier = Modifier
@@ -70,7 +81,7 @@ fun EnrichmentOverlay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (isExisting) "Restock Item" else "New Item Discovery",
+                        text = if (isExisting) "Restock Item" else if (isPastItem) "Re-adding Past Item" else "New Item Discovery",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -89,9 +100,10 @@ fun EnrichmentOverlay(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (syncItem.imageUrl != null) {
+                        val displayImageUrl = syncItem.imageUrl ?: existingItem?.activeImageSource
+                        if (displayImageUrl != null) {
                             AsyncImage(
-                                model = syncItem.imageUrl,
+                                model = displayImageUrl,
                                 contentDescription = null,
                                 modifier = Modifier
                                     .size(80.dp)
@@ -102,15 +114,17 @@ fun EnrichmentOverlay(
                         Spacer(Modifier.width(16.dp))
                         Column {
                             Text(
-                                syncItem.productName ?: "Unknown Product",
+                                syncItem.productName ?: existingItem?.name ?: "Unknown Product",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
-                            if (syncItem.brand != null) {
-                                Text(syncItem.brand, style = MaterialTheme.typography.bodySmall)
+                            val brandText = syncItem.brand ?: existingItem?.brand
+                            if (brandText != null) {
+                                Text(brandText, style = MaterialTheme.typography.bodySmall)
                             }
-                            if (syncItem.quantity != null) {
-                                Text(syncItem.quantity, style = MaterialTheme.typography.labelSmall)
+                            val quantityText = syncItem.quantity ?: existingItem?.packageQuantity
+                            if (quantityText != null) {
+                                Text(quantityText, style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
@@ -142,10 +156,21 @@ fun EnrichmentOverlay(
                     }
                 }
 
+                val locationLabel = when {
+                    isExisting && existingItem != null -> "Stored at S${existingItem.shelfNumber}-${existingItem.zoneIndex}"
+                    isPastItem && existingItem != null -> {
+                        val shelfName = PantryConstants.getShelfName(existingItem.shelfNumber)
+                        val zoneLabel = PantryConstants.getZoneLabel(existingItem.zoneIndex)
+                        "Suggested Location: $shelfName • $zoneLabel (Last location)"
+                    }
+                    else -> "Assign a shelf"
+                }
+
                 Text(
-                    text = if (isExisting && existingItem != null) "Stored at S${existingItem.shelfNumber}-${existingItem.zoneIndex}" else "Assign a shelf",
+                    text = locationLabel,
                     style = MaterialTheme.typography.titleMedium,
-                    color = if (isExisting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    color = if (isExisting || isPastItem) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (isPastItem) FontWeight.Bold else FontWeight.Normal
                 )
 
                 Box(
