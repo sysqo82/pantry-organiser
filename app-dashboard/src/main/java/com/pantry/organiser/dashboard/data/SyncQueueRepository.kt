@@ -16,7 +16,7 @@ class SyncQueueRepository @Inject constructor(
     private val syncQueueDao: SyncQueueDao
 ) {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        android.util.Log.e("SyncQueue", "Unhandled exception in SyncQueue scope: ${throwable.message}")
+        Log.e("SyncQueue", "Unhandled exception in SyncQueue scope: ${throwable.message}")
     }
     private val scope = CoroutineScope(Dispatchers.IO + exceptionHandler)
 
@@ -45,11 +45,11 @@ class SyncQueueRepository @Inject constructor(
 
     private suspend fun fetchInitialBatches(pantryId: String) {
         try {
-            android.util.Log.d("SyncQueue", "Performing initial batch fetch for $pantryId")
+            Log.d("SyncQueue", "Performing initial batch fetch for $pantryId")
             val batches = syncService.fetchBatches(pantryId)
             batches.forEach { handlePayload(it) }
         } catch (e: Exception) {
-            android.util.Log.e("SyncQueue", "Initial fetch failed: ${e.message}")
+            Log.e("SyncQueue", "Initial fetch failed: ${e.message}")
         }
     }
 
@@ -59,16 +59,23 @@ class SyncQueueRepository @Inject constructor(
         Log.d("SyncQueue", "Processing batch with ${itemIds.size} itemIds and ${scannedItems.size} legacy items")
         val items = mutableListOf<SyncQueueItem>()
 
-        if (itemIds.isNotEmpty()) {
-            val fetchedPantryItems = try {
-                syncService.fetchPantryItems(payload.pantryId)
-            } catch (_: Exception) {
-                emptyList()
-            }
-            val itemMap = fetchedPantryItems.associateBy { it.id }
+        val fetchedPantryItems = try {
+            syncService.fetchPantryItems(payload.pantryId)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val itemMap = fetchedPantryItems.associateBy { it.id }
 
+        if (itemIds.isNotEmpty()) {
             itemIds.forEachIndexed { index, itemId ->
                 val pantryItem = itemMap[itemId]
+
+                // If item is already assigned to a shelf in the pantry, skip queueing it as pending
+                if (pantryItem != null && pantryItem.isAssigned) {
+                    Log.d("SyncQueue", "Skipping already assigned item $itemId (${pantryItem.name})")
+                    return@forEachIndexed
+                }
+
                 val correspondingScannedItem = scannedItems.getOrNull(index)
 
                 val barcode = pantryItem?.barcode ?: correspondingScannedItem?.barcode ?: ""
@@ -96,7 +103,12 @@ class SyncQueueRepository @Inject constructor(
         }
         
         if (items.isEmpty() && scannedItems.isNotEmpty()) {
-            val legacyItems = scannedItems.map { scannedItem ->
+            val legacyDeferreds = scannedItems.mapNotNull { scannedItem ->
+                if (scannedItem.barcode.isNotBlank() && fetchedPantryItems.any { it.barcode == scannedItem.barcode && it.isAssigned }) {
+                    Log.d("SyncQueue", "Skipping legacy item with assigned barcode ${scannedItem.barcode}")
+                    return@mapNotNull null
+                }
+
                 async {
                     val needsEnrichment = scannedItem.productName.isBlank() || scannedItem.productName == "Enriching..."
                     val productName: String
@@ -113,7 +125,7 @@ class SyncQueueRepository @Inject constructor(
                         val offProduct = try {
                             offRepository.getProduct(scannedItem.barcode)
                         } catch (e: Exception) {
-                            android.util.Log.e("SyncQueue", "OFF enrichment failed for ${scannedItem.barcode}: ${e.message}")
+                            Log.e("SyncQueue", "OFF enrichment failed for ${scannedItem.barcode}: ${e.message}")
                             null
                         }
                         productName = offProduct?.displayProductName ?: scannedItem.productName.ifBlank { "Unknown Product" }
@@ -134,12 +146,15 @@ class SyncQueueRepository @Inject constructor(
                         quantity = quantity
                     )
                 }
-            }.awaitAll()
+            }
+            val legacyItems = legacyDeferreds.awaitAll()
             items.addAll(legacyItems)
         }
         
-        android.util.Log.d("SyncQueue", "Inserting ${items.size} queue items into local DB")
-        syncQueueDao.insertItems(items)
+        if (items.isNotEmpty()) {
+            Log.d("SyncQueue", "Inserting ${items.size} pending queue items into local DB")
+            syncQueueDao.insertItems(items)
+        }
     }
 
     fun getPendingItems(): Flow<List<SyncQueueItem>> = syncQueueDao.getPendingItems()

@@ -139,7 +139,7 @@ fun DashboardLayout(
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         val displayedItems = remember(pantryItems) {
             pantryItems
-                .filter { it.hasStock }
+                .filter { it.isAssigned && it.hasStock }
                 .sortedWith(
                     compareByDescending<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }
