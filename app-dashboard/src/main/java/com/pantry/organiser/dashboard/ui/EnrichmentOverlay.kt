@@ -259,34 +259,55 @@ private fun QuantitySelectorRow(
     onQuantityChange: (Int) -> Unit,
     compact: Boolean
 ) {
+    val buttonSize = if (compact) 38.dp else 44.dp
+    val iconSize = if (compact) 20.dp else 24.dp
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier.fillMaxWidth()
     ) {
         Text("Quantity:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Surface(
                 onClick = { if (quantity > 1) onQuantityChange(quantity - 1) },
-                modifier = Modifier
-                    .size(if (compact) 36.dp else 44.dp)
-                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(buttonSize)
             ) {
-                Icon(Icons.Default.Remove, contentDescription = "Decrease")
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Decrease",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
+
             Text(
                 text = quantity.toString(),
                 style = if (compact) MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.padding(horizontal = if (compact) 14.dp else 20.dp)
+                fontWeight = FontWeight.Black
             )
-            IconButton(
+
+            Surface(
                 onClick = { onQuantityChange(quantity + 1) },
-                modifier = Modifier
-                    .size(if (compact) 36.dp else 44.dp)
-                    .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape)
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.size(buttonSize)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Increase")
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Increase",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(iconSize)
+                    )
+                }
             }
         }
     }
