@@ -557,4 +557,38 @@ class DashboardViewModelTest {
         viewModel.clearProbeMessage()
         assertNull(viewModel.uiState.value.probeMessage)
     }
+
+    @Test
+    fun `pendingItems in uiState only contains real pending items and does not synthesize items from pantry`() = runTest {
+        val item1 = PantryItem(id = "1", name = "Salt", shelfNumber = 1, zoneIndex = 1, isAssigned = false, activeCount = 1)
+        val item2 = PantryItem(id = "2", name = "Pepper", shelfNumber = 1, zoneIndex = 2, isAssigned = false, activeCount = 1)
+
+        every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
+        every { pantryRepository.allItems } returns flowOf(listOf(item1, item2))
+
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+
+        assertEquals(0, vm.uiState.value.pendingItems.size)
+        assertEquals(2, vm.uiState.value.pantryItems.size)
+    }
+
+    @Test
+    fun `clearAllPendingItems clears sync queue without deleting pantry items`() = runTest {
+        val pendingItem = SyncQueueItem(
+            id = "sq_1",
+            itemId = "pantry_item_123",
+            barcode = "12345678",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Rice"
+        )
+
+        every { syncQueueRepository.getPendingItems() } returns flowOf(listOf(pendingItem))
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+
+        vm.clearAllPendingItems()
+
+        coVerify(exactly = 1) { syncQueueRepository.clearAllPendingItems() }
+        coVerify(exactly = 0) { pantryRepository.deleteItem(any()) }
+    }
 }
