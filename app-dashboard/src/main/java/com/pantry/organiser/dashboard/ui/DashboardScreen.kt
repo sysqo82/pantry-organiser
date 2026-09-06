@@ -6,6 +6,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,67 +51,61 @@ fun DashboardScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                if (!isTablet) {
-                    CenterAlignedTopAppBar(
-                        title = { Text("Pantry Dashboard", fontWeight = FontWeight.Bold) }
-                    )
-                }
-            }
-        ) { padding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                DashboardLayout(
-                    pendingItems = uiState.pendingItems,
-                    pantryItems = uiState.pantryItems,
-                    onProcessItem = { viewModel.processItem(it) },
-                    onSelectItem = { viewModel.selectItem(it) },
-                    onConsume = { item -> viewModel.consumeItem(item) },
-                    onRestock = { item -> viewModel.restockItem(item) }
+    Scaffold(
+        topBar = {
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            DashboardLayout(
+                pendingItems = uiState.pendingItems,
+                pantryItems = uiState.pantryItems,
+                onProcessItem = { viewModel.processItem(it) },
+                onSelectItem = { viewModel.selectItem(it) },
+                onConsume = { item -> viewModel.consumeItem(item) },
+                onRestock = { item -> viewModel.restockItem(item) },
+                onClearPendingItem = { viewModel.clearPendingItem(it) },
+                onClearAllPending = { viewModel.clearAllPendingItems() }
+            )
+        }
+    }
+
+    // Active Overlays
+    uiState.activeOverlay?.let { overlay ->
+        when (overlay) {
+            is OverlayContext.SyncQueueEnrichment -> {
+                EnrichmentOverlay(
+                    syncItem = overlay.syncItem,
+                    existingItem = overlay.existingItem,
+                    onSave = { shelf, zone, qty, fill ->
+                        viewModel.saveEnrichedItem(overlay.syncItem, overlay.existingItem, shelf, zone, qty, fill)
+                    },
+                    onDismiss = { viewModel.dismissOverlay() }
                 )
             }
-        }
-
-        // Active Overlays
-        uiState.activeOverlay?.let { overlay ->
-            when (overlay) {
-                is OverlayContext.SyncQueueEnrichment -> {
-                    EnrichmentOverlay(
-                        syncItem = overlay.syncItem,
-                        existingItem = overlay.existingItem,
-                        onSave = { shelf, zone, qty, fill ->
-                            viewModel.saveEnrichedItem(overlay.syncItem, overlay.existingItem, shelf, zone, qty, fill)
-                        },
-                        onDismiss = { viewModel.dismissOverlay() }
-                    )
-                }
-                is OverlayContext.ItemDetail -> {
-                    ItemDetailActionModal(
-                        item = overlay.item,
-                        onConsume = { amount -> viewModel.consumeItem(overlay.item, amount) },
-                        onRestock = { viewModel.restockItem(overlay.item) },
-                        onEdit = { viewModel.editItem(overlay.item) },
-                        onUpdateLevel = { fillLevel -> viewModel.updateFillLevel(overlay.item, fillLevel) },
-                        onDismiss = { viewModel.dismissOverlay() }
-                    )
-                }
-                is OverlayContext.ItemEdit -> {
-                    EditItemBottomSheet(
-                        item = overlay.item,
-                        onSave = { updatedItem -> viewModel.saveEditedItem(updatedItem) },
-                        onDelete = { itemToDelete -> viewModel.deleteItem(itemToDelete) },
-                        onDismiss = { viewModel.dismissOverlay() }
-                    )
-                }
-                is OverlayContext.ManualEntry -> {
-                    // Manual entry if needed
-                }
+            is OverlayContext.ItemDetail -> {
+                ItemDetailActionModal(
+                    item = overlay.item,
+                    onConsume = { amount -> viewModel.consumeItem(overlay.item, amount) },
+                    onRestock = { viewModel.restockItem(overlay.item) },
+                    onEdit = { viewModel.editItem(overlay.item) },
+                    onUpdateLevel = { fillLevel -> viewModel.updateFillLevel(overlay.item, fillLevel) },
+                    onDismiss = { viewModel.dismissOverlay() }
+                )
+            }
+            is OverlayContext.ItemEdit -> {
+                EditItemBottomSheet(
+                    item = overlay.item,
+                    onSave = { updatedItem -> viewModel.saveEditedItem(updatedItem) },
+                    onDelete = { itemToDelete -> viewModel.deleteItem(itemToDelete) },
+                    onDismiss = { viewModel.dismissOverlay() }
+                )
+            }
+            is OverlayContext.ManualEntry -> {
+                // Manual entry if needed
             }
         }
     }
@@ -123,6 +120,8 @@ fun DashboardLayout(
     onSelectItem: (PantryItem) -> Unit,
     onConsume: (PantryItem) -> Unit,
     onRestock: (PantryItem) -> Unit,
+    onClearPendingItem: (SyncQueueItem) -> Unit = {},
+    onClearAllPending: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Inventory, 1: Sync Queue
@@ -173,6 +172,28 @@ fun DashboardLayout(
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (pendingItems.isEmpty()) {
                     item { Text("No pending scans", modifier = Modifier.padding(16.dp)) }
+                } else {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Pending Scans (${pendingItems.size})",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            OutlinedButton(
+                                onClick = onClearAllPending,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Clear All")
+                            }
+                        }
+                    }
                 }
                 items(pendingItems, key = { it.id.ifBlank { "${it.barcode}_${it.scannedAt}" } }) { item ->
                     ElevatedCard(onClick = { onProcessItem(item) }, modifier = Modifier.fillMaxWidth()) {
@@ -181,6 +202,10 @@ fun DashboardLayout(
                                 Text(item.productName ?: "Scanning...", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                 Text("Barcode: ${item.barcode}", style = MaterialTheme.typography.bodySmall)
                             }
+                            IconButton(onClick = { onClearPendingItem(item) }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear mis-scan", tint = MaterialTheme.colorScheme.error)
+                            }
+                            Spacer(Modifier.width(4.dp))
                             Button(onClick = { onProcessItem(item) }) {
                                 Text("Assign Shelf")
                             }

@@ -27,13 +27,22 @@ enum class IngestionMode {
     HOME, CHECK, INSERT
 }
 
+data class CheckedNotFoundItem(
+    val barcode: String,
+    val productName: String,
+    val brand: String? = null,
+    val imageUrl: String? = null
+)
+
 data class IngestionUiState(
     val mode: IngestionMode = IngestionMode.HOME,
     val scannedItems: List<ScannedItem> = emptyList(),
     val createdPantryItems: List<PantryItem> = emptyList(),
     val items: List<PantryItem> = emptyList(), // Placeholder for fetching current inventory
     val isSending: Boolean = false,
-    val pantryId: String = "default-pantry"
+    val pantryId: String = "default-pantry",
+    val scannedCheckItem: PantryItem? = null,
+    val checkedNotFound: CheckedNotFoundItem? = null
 )
 
 @HiltViewModel
@@ -80,13 +89,18 @@ class IngestionViewModel @Inject constructor(
             syncService.observePantryItems(_uiState.value.pantryId).collect { newItem ->
                 _uiState.update { state ->
                     val updatedList = state.items.toMutableList()
-                    val existingIndex = updatedList.indexOfFirst { it.id == newItem.id || (it.barcode != null && it.barcode == newItem.barcode) }
+                    val existingIndex = updatedList.indexOfFirst { it.id == newItem.id }
+                    val barcodeIndex = if (existingIndex < 0 && !newItem.barcode.isNullOrBlank()) {
+                        updatedList.indexOfFirst { it.barcode == newItem.barcode }
+                    } else -1
 
                     val isAvailable = newItem.isAssigned && newItem.hasStock && newItem.sealedCount >= 0
 
                     if (isAvailable) {
                         if (existingIndex >= 0) {
                             updatedList[existingIndex] = newItem
+                        } else if (barcodeIndex >= 0) {
+                            updatedList[barcodeIndex] = newItem
                         } else {
                             updatedList.add(newItem)
                         }
@@ -149,9 +163,46 @@ class IngestionViewModel @Inject constructor(
 
     private fun handleBarcode(barcode: String) {
         if (_uiState.value.mode == IngestionMode.CHECK) {
-            // Single shot logic: show item and exit
-            setMode(IngestionMode.HOME)
-            feedbackController.signalSuccess()
+            viewModelScope.launch {
+                val currentPantryItems = try {
+                    syncService.fetchPantryItems(_uiState.value.pantryId)
+                } catch (e: Exception) {
+                    emptyList()
+                }
+                val matched = currentPantryItems.find { it.barcode == barcode }
+                    ?: _uiState.value.items.find { it.barcode == barcode }
+
+                if (matched != null) {
+                    feedbackController.signalSuccess()
+                    _uiState.update { state ->
+                        state.copy(
+                            mode = IngestionMode.HOME,
+                            scannedCheckItem = matched,
+                            checkedNotFound = null
+                        )
+                    }
+                } else {
+                    feedbackController.signalUnknown()
+                    val offProduct = try { offRepository.getProduct(barcode) } catch (e: Exception) { null }
+                    val name = offProduct?.displayProductName?.takeIf { it.isNotBlank() } ?: "Unknown Product"
+                    val brand = offProduct?.displayBrands
+                    val imageUrl = offProduct?.imageUrl
+
+                    val notFoundInfo = CheckedNotFoundItem(
+                        barcode = barcode,
+                        productName = name,
+                        brand = brand,
+                        imageUrl = imageUrl
+                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            mode = IngestionMode.HOME,
+                            scannedCheckItem = null,
+                            checkedNotFound = notFoundInfo
+                        )
+                    }
+                }
+            }
         } else if (_uiState.value.mode == IngestionMode.INSERT) {
             val alreadyScanned = _uiState.value.scannedItems.any { it.barcode == barcode }
             if (alreadyScanned) {
@@ -211,51 +262,6 @@ class IngestionViewModel @Inject constructor(
                             } else it
                         })
                     }
-
-                    // Create pantry_item record in PocketBase DB as unassigned
-                    val inferredUnits = PantryItem.inferUnitsPerPack(productName, quantity)
-                    val determinedType = PantryItem.determineTrackingType(productName, quantity = quantity, unitsPerPack = inferredUnits)
-
-                    val initialSealed = if (determinedType == TrackingType.DISCRETE_COUNT) {
-                        if (inferredUnits > 1) 0 else 1
-                    } else {
-                        0
-                    }
-
-                    val newPantryItem = PantryItem(
-                        id = "", // Empty ID so PocketBase generates record ID
-                        name = productName,
-                        barcode = barcode,
-                        brand = brand,
-                        packageQuantity = quantity,
-                        imageUrl = imageUrl,
-                        apiImageUrl = imageUrl,
-                        shelfNumber = 1,
-                        zoneIndex = 1,
-                        trackingType = determinedType,
-                        sealedCount = initialSealed,
-                        unitsPerPack = inferredUnits,
-                        activeCount = inferredUnits,
-                        isAssigned = false, // Unassigned
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-
-                    val created = try {
-                        syncService.createPantryItem(newPantryItem)
-                    } catch (e: Exception) {
-                        Log.e("IngestionVM", "Failed to create unassigned pantry item on PB: ${e.message}")
-                        null
-                    }
-
-                    if (created != null && created.id.isNotBlank() && !created.id.startsWith("local_")) {
-                        Log.d("IngestionVM", "Successfully created pantry item on PB with ID: ${created.id}")
-                        _uiState.update { state ->
-                            state.copy(createdPantryItems = state.createdPantryItems + created)
-                        }
-                    } else {
-                        Log.e("IngestionVM", "Failed to create pantry item on PB for barcode: $barcode")
-                    }
                 }
             }
         }
@@ -268,14 +274,51 @@ class IngestionViewModel @Inject constructor(
     fun sendToPantry() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true) }
-            val itemIds = _uiState.value.createdPantryItems
-                .map { it.id }
-                .filter { it.isNotBlank() && !it.startsWith("local_") }
+            val currentScanned = _uiState.value.scannedItems
+            val createdItemIds = mutableListOf<String>()
 
-            Log.d("IngestionVM", "Sending batch_payload with ${itemIds.size} itemIds: $itemIds")
+            // Create unassigned pantry_item records on PocketBase ONLY when user clicks "Send to Pantry"
+            currentScanned.forEach { item ->
+                val inferredUnits = PantryItem.inferUnitsPerPack(item.productName, item.quantity)
+                val determinedType = PantryItem.determineTrackingType(item.productName, quantity = item.quantity, unitsPerPack = inferredUnits)
+                val initialSealed = if (determinedType == TrackingType.DISCRETE_COUNT) {
+                    if (inferredUnits > 1) 0 else 1
+                } else 0
+
+                val newPantryItem = PantryItem(
+                    id = "",
+                    name = item.productName.ifBlank { "Unknown Product" },
+                    barcode = item.barcode,
+                    brand = item.brand,
+                    packageQuantity = item.quantity,
+                    imageUrl = item.imageUrl,
+                    apiImageUrl = item.imageUrl,
+                    shelfNumber = 1,
+                    zoneIndex = 1,
+                    trackingType = determinedType,
+                    sealedCount = initialSealed,
+                    unitsPerPack = inferredUnits,
+                    activeCount = inferredUnits,
+                    isAssigned = false, // Unassigned
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                try {
+                    val created = syncService.createPantryItem(newPantryItem)
+                    if (created != null && created.id.isNotBlank() && !created.id.startsWith("local_")) {
+                        Log.d("IngestionVM", "Successfully created pantry item on PB for ${item.barcode}: ${created.id}")
+                        createdItemIds.add(created.id)
+                    }
+                } catch (e: Exception) {
+                    Log.e("IngestionVM", "Failed to create pantry item on PB for ${item.barcode}: ${e.message}")
+                }
+            }
+
+            Log.d("IngestionVM", "Sending batch_payload with ${createdItemIds.size} itemIds: $createdItemIds")
             val payload = BatchPayload(
                 pantryId = _uiState.value.pantryId,
-                itemIds = itemIds,
+                itemIds = createdItemIds,
                 items = emptyList()
             )
             try {
@@ -285,6 +328,10 @@ class IngestionViewModel @Inject constructor(
                 _uiState.update { it.copy(isSending = false) }
             }
         }
+    }
+
+    fun clearCheckedNotFound() {
+        _uiState.update { it.copy(checkedNotFound = null) }
     }
 
     fun startScanner(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {

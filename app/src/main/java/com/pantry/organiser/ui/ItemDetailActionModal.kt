@@ -1,5 +1,6 @@
 package com.pantry.organiser.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.InventorySuggestionEngine
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.ui.components.ProductThumbnail

@@ -149,6 +149,15 @@ class SyncQueueRepository @Inject constructor(
         syncQueueDao.markAsProcessed(key)
     }
 
+    suspend fun clearPendingItem(item: SyncQueueItem) {
+        syncQueueDao.deleteByIdOrItemId(item.id, item.itemId)
+        syncQueueDao.markAsProcessed(item.id)
+    }
+
+    suspend fun clearAllPendingItems() {
+        syncQueueDao.clearAll()
+    }
+
     suspend fun clearProcessed() {
         syncQueueDao.clearProcessed()
     }

@@ -14,6 +14,12 @@ interface SyncQueueDao {
     @Query("UPDATE sync_queue SET isProcessed = 1 WHERE id = :key")
     suspend fun markAsProcessed(key: String)
 
+    @Query("DELETE FROM sync_queue WHERE id = :id OR itemId = :itemId")
+    suspend fun deleteByIdOrItemId(id: String, itemId: String)
+
+    @Query("DELETE FROM sync_queue")
+    suspend fun clearAll()
+
     @Query("DELETE FROM sync_queue WHERE isProcessed = 1")
     suspend fun clearProcessed()
     

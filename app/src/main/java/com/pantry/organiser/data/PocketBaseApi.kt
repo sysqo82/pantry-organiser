@@ -1,5 +1,6 @@
 package com.pantry.organiser.data
 
+import android.util.Log
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import io.ktor.client.*
@@ -64,6 +65,23 @@ class PocketBaseApi {
             response.items
         } catch (e: Exception) {
             android.util.Log.e("PocketBase", "Failed to fetch items", e)
+            null
+        }
+    }
+
+    suspend fun searchItems(query: String): List<PocketBasePantryItem>? {
+        if (query.isBlank()) return getItems()
+        return try {
+            val sanitized = query.trim().replace("\"", "\\\"")
+            val filterParam = "(name ~ \"$sanitized\" || brand ~ \"$sanitized\" || barcode ~ \"$sanitized\")"
+            val response: PocketBaseListResponse<PocketBasePantryItem> = 
+                client.get("$baseUrl/api/collections/pantry_items/records") {
+                    parameter("perPage", 100)
+                    parameter("filter", filterParam)
+                }.body()
+            response.items
+        } catch (e: Exception) {
+            Log.e("PocketBase", "Failed to search items for query: $query", e)
             null
         }
     }

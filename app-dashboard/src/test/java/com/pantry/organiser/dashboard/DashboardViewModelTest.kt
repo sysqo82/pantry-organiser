@@ -6,6 +6,7 @@ import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.dashboard.data.PantryRepository
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.data.SyncQueueRepository
+import com.pantry.organiser.dashboard.ui.OverlayContext
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -465,5 +466,79 @@ class DashboardViewModelTest {
         assertEquals("Pizza Topper", stateItems[0].name)
         assertEquals("Soy Sauce", stateItems[1].name)
         assertEquals("Salt", stateItems[2].name)
+    }
+
+    @Test
+    fun `processItem and saveEnrichedItem merges into existing assigned item with same barcode and deletes unassigned duplicate`() = runTest {
+        val assignedItem = PantryItem(
+            id = "assigned_1",
+            name = "Pizza Topper",
+            barcode = "12345",
+            shelfNumber = 3,
+            zoneIndex = 2,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 1,
+            activeCount = 1,
+            sealedCount = 0,
+            isAssigned = true
+        )
+
+        val unassignedItem = PantryItem(
+            id = "unassigned_2",
+            name = "Pizza Topper",
+            barcode = "12345",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 1,
+            activeCount = 1,
+            sealedCount = 1,
+            isAssigned = false
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "unassigned_unassigned_2",
+            itemId = "unassigned_2",
+            barcode = "12345",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Pizza Topper",
+            brand = "Tesco",
+            imageUrl = "",
+            quantity = "1 Unit"
+        )
+
+        every { pantryRepository.allItems } returns flowOf(listOf(assignedItem, unassignedItem))
+        coEvery { pantryRepository.getItemByBarcode("12345") } returns assignedItem
+
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository)
+
+        vm.processItem(syncItem)
+
+        val overlay = vm.uiState.value.activeOverlay
+        assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
+        val enrichment = overlay as OverlayContext.SyncQueueEnrichment
+        assertEquals("assigned_1", enrichment.existingItem?.id) // Should select existing assigned item!
+
+        val updateSlot = slot<PantryItem>()
+        val deleteSlot = slot<PantryItem>()
+        coEvery { pantryRepository.updateItem(capture(updateSlot)) } returns Unit
+        coEvery { pantryRepository.deleteItem(capture(deleteSlot)) } returns Unit
+
+        vm.saveEnrichedItem(
+            syncItem = syncItem,
+            existingItem = enrichment.existingItem,
+            shelf = 3,
+            zone = 2,
+            quantityToAdd = 1,
+            fillLevel = FillLevel.FULL
+        )
+
+        val updated = updateSlot.captured
+        assertEquals("assigned_1", updated.id)
+        assertTrue(updated.isAssigned)
+
+        val deleted = deleteSlot.captured
+        assertEquals("unassigned_2", deleted.id)
     }
 }

@@ -88,6 +88,11 @@ data class PantryItem(
 
     val hasStock: Boolean get() = totalDisplayCount > 0
 
+    val isLowStock: Boolean get() = when (trackingType) {
+        TrackingType.BULK_LEVEL -> (activeFill == FillLevel.LOW || activeFill == FillLevel.EMPTY) && sealedCount == 0
+        TrackingType.DISCRETE_COUNT -> totalDisplayCount <= 1
+    }
+
     val formattedStockText: String get() = when (trackingType) {
         TrackingType.BULK_LEVEL -> {
             val totalPacks = if (activeFill != FillLevel.EMPTY) sealedCount + 1 else sealedCount
@@ -152,6 +157,13 @@ data class PantryItem(
             val categoriesCombined = categories?.joinToString(" ")?.lowercase() ?: ""
             val quantityLower = quantity?.lowercase() ?: ""
             val nameLower = name.lowercase()
+
+            val forceDiscretePhrases = listOf("pearl couscous", "giant couscous", "israeli couscous")
+            if (forceDiscretePhrases.any { phrase ->
+                nameLower.contains(phrase) || categoriesCombined.contains(phrase)
+            }) {
+                return TrackingType.DISCRETE_COUNT
+            }
 
             val stapleRegex = Regex(
                 "\\b(flour|sugar|rice|pasta|pastas|spaghetti|bucatini|penne|fusilli|farfalle|macaroni|rigatoni|linguine|tagliatelle|fettuccine|lasagne|lasagna|orzo|gnocchi|cannelloni|tortellini|ravioli|vermicelli|rotini|cavatappi|conchiglie|pappardelle|noodles?|oats|oatmeal|porridge|couscous|quinoa|lentils|bulgur|polenta|semolina|barley)\\b"

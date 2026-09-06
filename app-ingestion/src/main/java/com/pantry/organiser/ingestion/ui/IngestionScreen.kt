@@ -40,9 +40,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.InventorySuggestionEngine
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.ingestion.ui.components.CheckedNotFoundBanner
 import com.pantry.organiser.ingestion.FeedbackEffect
 import com.pantry.organiser.ingestion.IngestionMode
 import com.pantry.organiser.ingestion.IngestionViewModel
@@ -62,6 +64,13 @@ fun IngestionScreen(
     var selectedShelfFilter by remember { mutableStateOf<Int?>(null) }
     var selectedItem by remember { mutableStateOf<PantryItem?>(null) }
     var photoCaptureItem by remember { mutableStateOf<PantryItem?>(null) }
+
+    LaunchedEffect(uiState.scannedCheckItem) {
+        uiState.scannedCheckItem?.let {
+            selectedItem = it
+            isGridExpanded = true
+        }
+    }
 
     // Intercept system back button when camera scanner or photo capture overlay is active
     BackHandler(enabled = uiState.mode != IngestionMode.HOME || photoCaptureItem != null) {
@@ -315,6 +324,14 @@ fun IngestionScreen(
                         }
                     }
 
+                    if (uiState.checkedNotFound != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        CheckedNotFoundBanner(
+                            info = uiState.checkedNotFound!!,
+                            onDismiss = { viewModel.clearCheckedNotFound() }
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Row(
@@ -462,85 +479,50 @@ fun IngestionScreen(
                                         Text(
                                             item.name,
                                             fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.titleMedium,
                                             color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     supportingContent = {
-                                        Text(
-                                            "${item.brand ?: "Generic"} · Shelf ${item.shelfNumber}-${PantryConstants.getZoneLabel(item.zoneIndex)}",
-                                            style = MaterialTheme.typography.bodySmall
-                                        )
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                "${item.brand ?: "Generic"} · Shelf ${item.shelfNumber}-${PantryConstants.getZoneLabel(item.zoneIndex)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (item.isLowStock) {
+                                                Surface(
+                                                    color = Color(0xFFD32F2F),
+                                                    shape = RoundedCornerShape(6.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "Low Stock: ${item.formattedStockText}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color.White,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     },
                                     trailingContent = {
-                                        Column(
-                                            horizontalAlignment = Alignment.End,
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            if (item.trackingType == TrackingType.BULK_LEVEL && item.activeFill == FillLevel.FULL) {
-                                                val totalSealed = item.sealedCount + 1
-                                                Surface(
-                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.primaryContainer,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "$totalSealed Sealed",
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
-                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                            } else if (item.trackingType == TrackingType.BULK_LEVEL) {
-                                                Surface(
-                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.primaryContainer,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text(
-                                                        text = item.activeFill.label,
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
-                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
-                                                if (item.sealedCount > 0) {
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Surface(
-                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.primaryContainer
-                                                        else MaterialTheme.colorScheme.secondaryContainer,
-                                                        shape = RoundedCornerShape(6.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = "${item.sealedCount} Sealed",
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            fontSize = 10.sp,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimaryContainer
-                                                            else MaterialTheme.colorScheme.onSecondaryContainer,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                                        )
-                                                    }
-                                                }
-                                            } else {
-                                                Surface(
-                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.primaryContainer,
-                                                    shape = RoundedCornerShape(8.dp)
-                                                ) {
-                                                    Text(
-                                                        text = item.formattedStockText,
-                                                        style = MaterialTheme.typography.labelMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
-                                                        else MaterialTheme.colorScheme.onPrimaryContainer,
-                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                    )
-                                                }
+                                        if (!item.isLowStock) {
+                                            Surface(
+                                                color = if (isItemHighlighted) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.primaryContainer,
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = item.formattedStockText,
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isItemHighlighted) MaterialTheme.colorScheme.onPrimary
+                                                    else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
                                             }
                                         }
                                     },

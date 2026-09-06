@@ -87,12 +87,16 @@ class DashboardViewModel @Inject constructor(
 
     fun processItem(item: SyncQueueItem) {
         viewModelScope.launch {
-            val existingItem = if (item.itemId.isNotBlank()) {
-                pantryRepository.allItems.firstOrNull()?.find { it.id == item.itemId }
-                    ?: pantryRepository.getItemByBarcode(item.barcode)
-            } else {
-                pantryRepository.getItemByBarcode(item.barcode)
-            }
+            val allItems = pantryRepository.allItems.firstOrNull() ?: emptyList()
+            val assignedMatch = if (item.barcode.isNotBlank()) {
+                allItems.find { it.barcode == item.barcode && it.isAssigned }
+                    ?: pantryRepository.getItemByBarcode(item.barcode)?.takeIf { it.isAssigned }
+            } else null
+
+            val existingItem = assignedMatch
+                ?: (if (item.itemId.isNotBlank()) allItems.find { it.id == item.itemId } else null)
+                ?: pantryRepository.getItemByBarcode(item.barcode)
+
             _uiState.update { it.copy(activeOverlay = OverlayContext.SyncQueueEnrichment(item, existingItem)) }
         }
     }
@@ -222,6 +226,11 @@ class DashboardViewModel @Inject constructor(
             } else {
                 pantryRepository.addItem(itemToSave)
             }
+
+            if (syncItem.itemId.isNotBlank() && syncItem.itemId != itemToSave.id) {
+                pantryRepository.deleteItem(PantryItem(id = syncItem.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
+            }
+
             syncQueueRepository.markAsProcessed(syncItem.id)
 
             _uiState.update { it.copy(isSaving = false, activeOverlay = null) }
@@ -362,6 +371,31 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             pantryRepository.deleteItem(item)
             _uiState.update { it.copy(activeOverlay = null) }
+        }
+    }
+
+    fun clearPendingItem(item: SyncQueueItem) {
+        viewModelScope.launch {
+            if (item.itemId.isNotBlank()) {
+                pantryRepository.deleteItem(PantryItem(id = item.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
+            }
+            syncQueueRepository.clearPendingItem(item)
+            _uiState.update { state ->
+                state.copy(pendingItems = state.pendingItems.filter { it.id != item.id })
+            }
+        }
+    }
+
+    fun clearAllPendingItems() {
+        viewModelScope.launch {
+            val pending = _uiState.value.pendingItems
+            pending.forEach { item ->
+                if (item.itemId.isNotBlank()) {
+                    pantryRepository.deleteItem(PantryItem(id = item.itemId, name = "", shelfNumber = 1, zoneIndex = 1))
+                }
+            }
+            syncQueueRepository.clearAllPendingItems()
+            _uiState.update { it.copy(pendingItems = emptyList()) }
         }
     }
 

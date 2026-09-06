@@ -73,7 +73,7 @@ class PantryRepository @JvmOverloads constructor(
                     "create", "update" -> mergeAndInsert(event.record.toLocal())
                     "delete" -> {
                         val item = event.record.toLocal()
-                        pantryDao.deleteByIdOrBarcode(item.id, item.barcode)
+                        pantryDao.deleteItem(item)
                     }
                 }
             }
@@ -209,6 +209,24 @@ class PantryRepository @JvmOverloads constructor(
 
     suspend fun getItemByBarcode(barcode: String): PantryItem? {
         return pantryDao.getItemByBarcode(barcode)
+    }
+
+    suspend fun searchItemsOnTheFly(query: String): List<PantryItem> {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) {
+            return pantryDao.getAllItemsOnce()
+        }
+        val remoteItems = pocketBaseApi.searchItems(trimmed)
+        if (remoteItems != null) {
+            val converted = remoteItems.map { it.toLocal() }
+            converted.forEach { mergeAndInsert(it) }
+            return converted
+        }
+        return pantryDao.getAllItemsOnce().filter { item ->
+            item.name.contains(trimmed, ignoreCase = true) ||
+            (item.brand?.contains(trimmed, ignoreCase = true) == true) ||
+            (item.barcode?.contains(trimmed, ignoreCase = true) == true)
+        }
     }
 
     fun startRealtimeSync() {
