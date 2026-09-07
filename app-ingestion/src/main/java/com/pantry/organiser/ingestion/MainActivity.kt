@@ -1,5 +1,6 @@
 package com.pantry.organiser.ingestion
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -24,6 +25,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
+        handleIntent(intent)
+
         // Ensure status bar icons are visible on light/dark backgrounds
         val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
         windowInsetsController.isAppearanceLightStatusBars = true
@@ -46,5 +49,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val openMode = intent?.getStringExtra(EXTRA_OPEN_MODE)
+        if (openMode == "INSERT") {
+            viewModel.setMode(IngestionMode.INSERT)
+        }
+    }
+
+    companion object {
+        const val EXTRA_OPEN_MODE = "com.pantry.organiser.ingestion.OPEN_MODE"
     }
 }

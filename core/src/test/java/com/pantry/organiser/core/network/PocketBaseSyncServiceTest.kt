@@ -136,4 +136,39 @@ class PocketBaseSyncServiceTest {
         assertEquals("/api/collections/past_items/records", capturedPath)
         assertEquals(HttpMethod.Post, capturedMethod)
     }
+
+    @Test
+    fun `observePastItems performs handshake and emits past items`() = runTest {
+        val clientId = "test-client-id"
+        val jsonPayload = """{"id":"past_100","name":"Olive Oil","barcode":"123123123"}"""
+        val sseContent = "data: {\"clientId\":\"$clientId\"}\ndata: {\"action\":\"create\",\"record\":$jsonPayload}\n\n"
+
+        var subscriptionCaptured = false
+        val mockEngine = MockEngine { request ->
+            if (request.url.encodedPath == "/api/realtime" && request.method == HttpMethod.Post) {
+                subscriptionCaptured = true
+                respondOk()
+            } else {
+                respond(
+                    content = sseContent,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "text/event-stream")
+                )
+            }
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) { json() }
+            install(HttpTimeout)
+        }
+        val service = PocketBaseSyncService(client, baseUrl)
+
+        service.observePastItems(pantryId).test {
+            val pastItem = awaitItem()
+            assertEquals("past_100", pastItem.id)
+            assertEquals("Olive Oil", pastItem.name)
+            assertEquals("123123123", pastItem.barcode)
+            assert(subscriptionCaptured)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }
