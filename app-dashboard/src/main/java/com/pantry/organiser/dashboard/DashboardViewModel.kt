@@ -148,7 +148,7 @@ class DashboardViewModel @Inject constructor(
             )
 
             val itemToSave = if (existingItem != null && existingItem.isAssigned && !isPastItem) {
-                val updatedType = determinedType
+                val updatedType = if (determinedType == TrackingType.DISCRETE_COUNT && inferredUnits > 1) TrackingType.DISCRETE_COUNT else existingItem.trackingType
                 val updatedUnits = if (inferredUnits > 1) inferredUnits else existingItem.unitsPerPack
 
                 val isGenericName = existingItem.name.isBlank() || 

@@ -169,7 +169,7 @@ data class PantryItem(
                 "\\b(flour|sugar|rice|pasta|pastas|spaghetti|bucatini|penne|fusilli|farfalle|macaroni|rigatoni|linguine|tagliatelle|fettuccine|lasagne|lasagna|orzo|gnocchi|cannelloni|tortellini|ravioli|vermicelli|rotini|cavatappi|conchiglie|pappardelle|noodles?|oats|oatmeal|porridge|couscous|quinoa|lentils|bulgur|polenta|semolina|barley)\\b"
             )
             val isDryStaple = stapleRegex.containsMatchIn(nameLower) || stapleRegex.containsMatchIn(categoriesCombined)
-            val isContainerOrSauce = nameLower.contains(Regex("\\b(can|tin|jar|bottle|sauce|spray)\\b"))
+            val isContainerOrSauce = nameLower.contains(Regex("\\b(can|tin|jar|bottle|sauce|spray|pouch|pouches|microwave|microwaveable|express|ready|steamed|sticky|quick)\\b"))
 
             if (isDryStaple && !isContainerOrSauce) {
                 return TrackingType.BULK_LEVEL
@@ -178,7 +178,9 @@ data class PantryItem(
             val forceDiscreteKeywords = listOf(
                 "sauce", "soy sauce", "ketchup", "mayonnaise", "mustard", 
                 "vinegar", "dressing", "can", "tin", "jar", "bottle", "spray",
-                "beans", "soup", "tuna", "sweetcorn", "corn", "tomatoes", "multipack", "tins", "cans", "bottles", "jars"
+                "beans", "soup", "tuna", "sweetcorn", "corn", "tomatoes", "multipack", "tins", "cans", "bottles", "jars",
+                "pouch", "pouches", "microwave", "microwaveable", "express rice", "ready rice", "steamed rice", "sticky rice",
+                "quick rice", "heat & eat", "heat and eat", "ready to heat", "micro rice"
             )
 
             if (forceDiscreteKeywords.any { keyword ->
