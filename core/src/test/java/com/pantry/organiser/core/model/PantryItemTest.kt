@@ -1,5 +1,7 @@
 package com.pantry.organiser.core.model
 
+import com.pantry.organiser.core.network.toLocal
+import com.pantry.organiser.core.network.toPocketBase
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -66,6 +68,21 @@ class PantryItemTest {
     }
 
     @Test
+    fun `determineTrackingType categorizes microwave rice and sticky rice pouches as discrete`() {
+        val stickyRice = PantryItem.determineTrackingType(name = "Tilda Sticky Rice", quantity = "250g")
+        val expressRice = PantryItem.determineTrackingType(name = "Uncle Ben's Express Basmati Rice", quantity = "250g")
+        val microwaveRice = PantryItem.determineTrackingType(name = "Tilda Microwave Jasmine Rice", quantity = "250g")
+        val pouchRice = PantryItem.determineTrackingType(name = "SunWhite Steamed Rice Pouch", quantity = "250g")
+        val rawBasmati1kg = PantryItem.determineTrackingType(name = "Tilda Pure Basmati Rice", quantity = "1kg")
+
+        assertEquals(TrackingType.DISCRETE_COUNT, stickyRice)
+        assertEquals(TrackingType.DISCRETE_COUNT, expressRice)
+        assertEquals(TrackingType.DISCRETE_COUNT, microwaveRice)
+        assertEquals(TrackingType.DISCRETE_COUNT, pouchRice)
+        assertEquals(TrackingType.BULK_LEVEL, rawBasmati1kg)
+    }
+
+    @Test
     fun `conversion between PantryItem and PastItem preserves all fields`() {
         val originalPantryItem = PantryItem(
             id = "item_123",
@@ -106,5 +123,22 @@ class PantryItemTest {
 
         val restoredPantryItem = pastItem.toPantryItem()
         assertEquals(originalPantryItem, restoredPantryItem)
+    }
+
+    @Test
+    fun `PocketBasePantryItem serialization preserves explicit trackingType`() {
+        val pantryItem = PantryItem(
+            id = "26xt5470djw24tk",
+            name = "Sticky Rice",
+            shelfNumber = 4,
+            zoneIndex = 3,
+            trackingType = TrackingType.DISCRETE_COUNT
+        )
+
+        val pbItem = pantryItem.toPocketBase()
+        assertEquals("DISCRETE_COUNT", pbItem.trackingType)
+
+        val localItem = pbItem.toLocal()
+        assertEquals(TrackingType.DISCRETE_COUNT, localItem.trackingType)
     }
 }

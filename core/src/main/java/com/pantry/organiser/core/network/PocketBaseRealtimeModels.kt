@@ -52,6 +52,7 @@ data class PocketBasePantryItem(
     @SerialName("local_image_uri") val localImageUri: String? = null,
     @SerialName("shelf_number") val shelfNumber: Int = 1,
     @SerialName("zone_index") val zoneIndex: Int = 1,
+    @SerialName("tracking_type") val trackingType: String? = null,
     @SerialName("sealed_count") val sealedCount: Int = 0,
     @SerialName("units_per_pack") val unitsPerPack: Int? = null,
     @SerialName("active_count") val activeCount: Int? = null,
@@ -90,6 +91,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         localImageUri = validLocalUri, // Send "" if null so PocketBase explicitly clears local_image_uri
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
+        trackingType = trackingType.name,
         sealedCount = sealedCount,
         unitsPerPack = unitsPerPack,
         activeCount = activeCount,
@@ -106,7 +108,9 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
 
     val inferredUnits = unitsPerPack ?: PantryItem.inferUnitsPerPack(name, packageQuantity)
     val effectiveActiveCount = activeCount ?: inferredUnits
-    val mappedTrackingType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
+    val mappedTrackingType = trackingType?.takeIf { it.isNotBlank() }?.let {
+        try { TrackingType.valueOf(it) } catch (_: Exception) { null }
+    } ?: PantryItem.determineTrackingType(name, quantity = packageQuantity)
     val rawFill = activeFill.ifBlank { "FULL" }
 
     val effectiveIsAssigned = isAssigned ?: true

@@ -3,6 +3,7 @@ package com.pantry.organiser.data
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.TrackingType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -18,6 +19,7 @@ data class PocketBasePantryItem(
     val image: String? = null, // PocketBase file field
     @SerialName("shelf_number") val shelfNumber: Int = 1,
     @SerialName("zone_index") val zoneIndex: Int = 1,
+    @SerialName("tracking_type") val trackingType: String? = null,
     @SerialName("sealed_count") val sealedCount: Int = 0,
     @SerialName("units_per_pack") val unitsPerPack: Int? = null,
     @SerialName("active_count") val activeCount: Int? = null,
@@ -94,6 +96,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
         localImageUri = localImageUri?.takeIf { it.isNotBlank() },
         shelfNumber = pbShelf,
         zoneIndex = pbZone,
+        trackingType = trackingType.name,
         sealedCount = sealedCount,
         unitsPerPack = unitsPerPack,
         activeCount = activeCount,
@@ -118,7 +121,9 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     val mappedShelf = shelfNumber.coerceIn(1, 4)
     val mappedZone = zoneIndex.coerceIn(1, 3)
     
-    val mappedTrackingType = PantryItem.determineTrackingType(name, quantity = packageQuantity)
+    val mappedTrackingType = trackingType?.takeIf { it.isNotBlank() }?.let {
+        try { TrackingType.valueOf(it) } catch (_: Exception) { null }
+    } ?: PantryItem.determineTrackingType(name, quantity = packageQuantity)
     val inferredUnits = unitsPerPack ?: PantryItem.inferUnitsPerPack(name, packageQuantity)
     val effectiveActiveCount = activeCount ?: inferredUnits
     val rawFill = activeFill.ifBlank { "FULL" }
