@@ -510,4 +510,78 @@ class PocketBaseSyncService(
             }
         }
     }
+
+    override fun observePastItems(pantryId: String): Flow<PastItem> = flow {
+        var retryDelay = 5000L
+        val maxDelay = 60000L
+
+        while (currentCoroutineContext().isActive) {
+            try {
+                val url = "$baseUrl/api/realtime"
+                Log.d("PocketBaseSync", "Connecting to realtime past_items: $url")
+                client.prepareGet(url) {
+                    timeout {
+                        requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                        connectTimeoutMillis = 15000
+                        socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
+                    }
+                }.execute { response ->
+                    retryDelay = 5000L
+                    val channel = response.bodyAsChannel()
+                    while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
+                        val line = try {
+                            channel.readUTF8Line()
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            null
+                        } ?: break
+
+                        if (line.startsWith("data:")) {
+                            val data = line.removePrefix("data:").trim()
+                            if (data.isNotEmpty()) {
+                                try {
+                                    val element = json.parseToJsonElement(data)
+                                    if (element is JsonObject && element.containsKey("clientId")) {
+                                        val clientId = element["clientId"]?.jsonPrimitive?.content
+                                        if (clientId != null) {
+                                            coroutineScope {
+                                                launch { subscribe(clientId, "past_items") }
+                                            }
+                                        }
+                                    } else {
+                                        val event = json.decodeFromJsonElement<RealtimeEvent>(element)
+                                        if (event.action == "create" || event.action == "update" || event.action == "delete") {
+                                            val pbItem = json.decodeFromJsonElement<PocketBasePantryItem>(event.record)
+                                            emit(pbItem.toPastLocal())
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w("PocketBaseSync", "Failed to parse realtime past_items data: $data", e)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isNetworkDown = e is UnknownHostException ||
+                                    e is ConnectException ||
+                                    e is SocketException ||
+                                    e.cause is UnknownHostException
+                if (isNetworkDown) {
+                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                } else {
+                    Log.e("PocketBaseSync", "Connection or stream error in observePastItems: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                }
+                if (!currentCoroutineContext().isActive) break
+                delay(retryDelay)
+                retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
+            } catch (t: Throwable) {
+                if (!currentCoroutineContext().isActive) throw t
+                Log.e("PocketBaseSync", "Fatal error in observePastItems", t)
+                if (!currentCoroutineContext().isActive) break
+                delay(10000)
+            }
+        }
+    }
 }

@@ -21,6 +21,7 @@ interface SyncService {
 
     // Past Items Sync
     suspend fun fetchPastItems(pantryId: String = "default-pantry"): List<PastItem>
+    fun observePastItems(pantryId: String = "default-pantry"): Flow<PastItem>
     suspend fun createPastItem(item: PastItem): PastItem?
     suspend fun deletePastItem(itemId: String): Boolean
 }

@@ -79,6 +79,12 @@ dependencies {
     implementation(libs.ktor.client.okhttp)
     implementation(libs.coil.compose)
 
+    // WorkManager & Glance AppWidget
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.glance)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
+
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.turbine)
