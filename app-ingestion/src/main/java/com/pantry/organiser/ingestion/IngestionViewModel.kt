@@ -77,7 +77,7 @@ class IngestionViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val currentPantryItems = syncService.fetchPantryItems(_uiState.value.pantryId)
-                val assignedItems = currentPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }
+                val assignedItems = currentPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
                 _uiState.update { it.copy(items = assignedItems) }
             } catch (e: Exception) {
                 Log.e("IngestionVM", "Failed to fetch pantry items: ${e.message}")
@@ -109,7 +109,7 @@ class IngestionViewModel @Inject constructor(
                             updatedList.removeAt(existingIndex)
                         }
                     }
-                    state.copy(items = updatedList)
+                    state.copy(items = updatedList.sortPantryItems())
                 }
             }
         }
@@ -336,5 +336,13 @@ class IngestionViewModel @Inject constructor(
 
     fun startScanner(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
         scanner.start(lifecycleOwner, surfaceProvider)
+    }
+
+    private fun List<PantryItem>.sortPantryItems(): List<PantryItem> {
+        return this.sortedWith(
+            compareByDescending<PantryItem> { it.shelfNumber }
+                .thenBy { it.zoneIndex }
+                .thenBy { it.name.lowercase() }
+        )
     }
 }

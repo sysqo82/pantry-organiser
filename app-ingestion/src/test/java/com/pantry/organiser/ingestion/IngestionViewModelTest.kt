@@ -273,4 +273,24 @@ class IngestionViewModelTest {
         assertEquals(1, viewModel.uiState.value.items.size)
         assertEquals("assigned_1", viewModel.uiState.value.items[0].id)
     }
+
+    @Test
+    fun `startRealtimeSync orders items by shelf descending, zone ascending, and name ascending`() = runTest {
+        val unsortedItems = listOf(
+            PantryItem(id = "1", name = "Zucchini", barcode = "100", shelfNumber = 1, zoneIndex = 1, isAssigned = true),
+            PantryItem(id = "2", name = "Apples", barcode = "200", shelfNumber = 4, zoneIndex = 2, isAssigned = true),
+            PantryItem(id = "3", name = "Bananas", barcode = "300", shelfNumber = 4, zoneIndex = 1, isAssigned = true),
+            PantryItem(id = "4", name = "Avocado", barcode = "400", shelfNumber = 4, zoneIndex = 2, isAssigned = true)
+        )
+        val realtimeFlow = MutableSharedFlow<PantryItem>()
+
+        coEvery { syncService.fetchPantryItems("default-pantry") } returns unsortedItems
+        every { syncService.observePantryItems("default-pantry") } returns realtimeFlow
+
+        viewModel.startRealtimeSync()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val itemNames = viewModel.uiState.value.items.map { it.name }
+        assertEquals(listOf("Bananas", "Apples", "Avocado", "Zucchini"), itemNames)
+    }
 }
