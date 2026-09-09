@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Pantry Ingestion</string>
+    <string name="app_name">Pantry Organiser</string>
     <string name="widget_shopping_list_name">Pantry Shopping List</string>
     <string name="widget_shopping_list_description">Displays items in past_items as a 2x4 shopping list.</string>
     <string name="widget_shopping_list_title">Shopping List</string>
