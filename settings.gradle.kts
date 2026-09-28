@@ -19,7 +19,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "organiser-organiser"
+rootProject.name = "pantry-organiser"
 include(":app")
 include(":core")
 include(":app-ingestion")
