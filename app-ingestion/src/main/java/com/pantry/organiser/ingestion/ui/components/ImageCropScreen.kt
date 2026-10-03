@@ -3,7 +3,7 @@ package com.pantry.organiser.ingestion.ui.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -13,22 +13,75 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import java.io.ByteArrayOutputStream
+import kotlin.math.sqrt
+
+private enum class CropDragHandle {
+    NONE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
+}
+
+private fun detectDragHandle(
+    touch: Offset,
+    cropRect: Rect,
+    cornerTouchRadius: Float,
+    edgeTouchMargin: Float
+): CropDragHandle {
+    fun distance(p1: Offset, p2: Offset): Float {
+        val dx = p1.x - p2.x
+        val dy = p1.y - p2.y
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    // 1. Check corner handles first
+    if (distance(touch, cropRect.topLeft) <= cornerTouchRadius) return CropDragHandle.TOP_LEFT
+    if (distance(touch, cropRect.topRight) <= cornerTouchRadius) return CropDragHandle.TOP_RIGHT
+    if (distance(touch, cropRect.bottomLeft) <= cornerTouchRadius) return CropDragHandle.BOTTOM_LEFT
+    if (distance(touch, cropRect.bottomRight) <= cornerTouchRadius) return CropDragHandle.BOTTOM_RIGHT
+
+    // 2. Check edge handles
+    if (touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.top + edgeTouchMargin) &&
+        touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.right + edgeTouchMargin)
+    ) {
+        return CropDragHandle.TOP
+    }
+    if (touch.y in (cropRect.bottom - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin) &&
+        touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.right + edgeTouchMargin)
+    ) {
+        return CropDragHandle.BOTTOM
+    }
+    if (touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.left + edgeTouchMargin) &&
+        touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin)
+    ) {
+        return CropDragHandle.LEFT
+    }
+    if (touch.x in (cropRect.right - edgeTouchMargin)..(cropRect.right + edgeTouchMargin) &&
+        touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin)
+    ) {
+        return CropDragHandle.RIGHT
+    }
+
+    // 3. Center inside crop rect
+    if (cropRect.contains(touch)) {
+        return CropDragHandle.CENTER
+    }
+
+    return CropDragHandle.NONE
+}
 
 @Composable
 fun ImageCropScreen(
@@ -38,138 +91,272 @@ fun ImageCropScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
+    var containerSize by remember { mutableStateOf(IntSize.Zero) }
+    var imageDisplayRect by remember { mutableStateOf(Rect.Zero) }
+    var cropRect by remember { mutableStateOf(Rect.Zero) }
+    var activeHandle by remember { mutableStateOf(CropDragHandle.NONE) }
 
-    BoxWithConstraints(
+    val density = LocalDensity.current
+    val cornerTouchRadius = remember(density) { with(density) { 36.dp.toPx() } }
+    val edgeTouchMargin = remember(density) { with(density) { 24.dp.toPx() } }
+    val minCropSize = remember(density) { with(density) { 60.dp.toPx() } }
+
+    LaunchedEffect(containerSize, bitmap) {
+        if (containerSize.width > 0 && containerSize.height > 0) {
+            val imgAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+            val containerAspect = containerSize.width.toFloat() / containerSize.height.toFloat()
+
+            val displayW: Float
+            val displayH: Float
+            if (imgAspect > containerAspect) {
+                displayW = containerSize.width.toFloat()
+                displayH = displayW / imgAspect
+            } else {
+                displayH = containerSize.height.toFloat()
+                displayW = displayH * imgAspect
+            }
+            val left = (containerSize.width - displayW) / 2f
+            val top = (containerSize.height - displayH) / 2f
+            val newDisplayRect = Rect(left, top, left + displayW, top + displayH)
+            imageDisplayRect = newDisplayRect
+
+            // Initial crop box: 85% of displayed image size
+            val cropW = newDisplayRect.width * 0.85f
+            val cropH = newDisplayRect.height * 0.85f
+            val cropLeft = newDisplayRect.left + (newDisplayRect.width - cropW) / 2f
+            val cropTop = newDisplayRect.top + (newDisplayRect.height - cropH) / 2f
+            cropRect = Rect(cropLeft, cropTop, cropLeft + cropW, cropTop + cropH)
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        val screenWidthPx = constraints.maxWidth.toFloat()
-        val screenHeightPx = constraints.maxHeight.toFloat()
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Header Bar
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Crop Photo: $itemName",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Drag corners or edges to adjust frame, drag center to move",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+            }
 
-        val cropSizePx = minOf(screenWidthPx, screenHeightPx) * 0.85f
-        val cropRectPx = Rect(
-            left = (screenWidthPx - cropSizePx) / 2f,
-            top = (screenHeightPx - cropSizePx) / 2f,
-            right = (screenWidthPx + cropSizePx) / 2f,
-            bottom = (screenHeightPx + cropSizePx) / 2f
-        )
+            // Interactive Crop Area
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .onGloballyPositioned { containerSize = it.size }
+            ) {
+                if (containerSize.width > 0 && containerSize.height > 0 && cropRect != Rect.Zero) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(imageDisplayRect, cropRect) {
+                                detectDragGestures(
+                                    onDragStart = { touch ->
+                                        activeHandle = detectDragHandle(
+                                            touch = touch,
+                                            cropRect = cropRect,
+                                            cornerTouchRadius = cornerTouchRadius,
+                                            edgeTouchMargin = edgeTouchMargin
+                                        )
+                                    },
+                                    onDragEnd = { activeHandle = CropDragHandle.NONE },
+                                    onDragCancel = { activeHandle = CropDragHandle.NONE },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        if (activeHandle == CropDragHandle.NONE) return@detectDragGestures
 
-        // Interactive Canvas for image & crop mask
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        scale = (scale * zoom).coerceIn(0.5f, 5f)
-                        offset += pan
+                                        var left = cropRect.left
+                                        var top = cropRect.top
+                                        var right = cropRect.right
+                                        var bottom = cropRect.bottom
+
+                                        when (activeHandle) {
+                                            CropDragHandle.TOP_LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            CropDragHandle.TOP_RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            CropDragHandle.BOTTOM_LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            CropDragHandle.BOTTOM_RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            CropDragHandle.TOP -> {
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            CropDragHandle.BOTTOM -> {
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            CropDragHandle.LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                            }
+                                            CropDragHandle.RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                            }
+                                            CropDragHandle.CENTER -> {
+                                                val dx = dragAmount.x
+                                                val dy = dragAmount.y
+                                                val clampedDx = if (left + dx < imageDisplayRect.left) imageDisplayRect.left - left
+                                                    else if (right + dx > imageDisplayRect.right) imageDisplayRect.right - right
+                                                    else dx
+                                                val clampedDy = if (top + dy < imageDisplayRect.top) imageDisplayRect.top - top
+                                                    else if (bottom + dy > imageDisplayRect.bottom) imageDisplayRect.bottom - bottom
+                                                    else dy
+                                                left += clampedDx
+                                                right += clampedDx
+                                                top += clampedDy
+                                                bottom += clampedDy
+                                            }
+                                            CropDragHandle.NONE -> {}
+                                        }
+                                        cropRect = Rect(left, top, right, bottom)
+                                    }
+                                )
+                            }
+                    ) {
+                        // 1. Draw image bitmap inside display bounds
+                        drawImage(
+                            image = bitmap.asImageBitmap(),
+                            dstOffset = IntOffset(imageDisplayRect.left.toInt(), imageDisplayRect.top.toInt()),
+                            dstSize = IntSize(imageDisplayRect.width.toInt(), imageDisplayRect.height.toInt())
+                        )
+
+                        // 2. Dim background outside cropRect
+                        clipPath(Path().apply { addRect(cropRect) }, clipOp = ClipOp.Difference) {
+                            drawRect(Color.Black.copy(alpha = 0.65f))
+                        }
+
+                        // 3. Crop rect border
+                        drawRect(
+                            color = Color.White,
+                            topLeft = cropRect.topLeft,
+                            size = cropRect.size,
+                            style = Stroke(width = 2.dp.toPx())
+                        )
+
+                        // 4. Rule of thirds grid
+                        val gridColor = Color.White.copy(alpha = 0.35f)
+                        val gridStroke = 1.dp.toPx()
+
+                        val thirdW = cropRect.width / 3f
+                        val thirdH = cropRect.height / 3f
+
+                        drawLine(gridColor, Offset(cropRect.left + thirdW, cropRect.top), Offset(cropRect.left + thirdW, cropRect.bottom), gridStroke)
+                        drawLine(gridColor, Offset(cropRect.left + 2 * thirdW, cropRect.top), Offset(cropRect.left + 2 * thirdW, cropRect.bottom), gridStroke)
+                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + thirdH), Offset(cropRect.right, cropRect.top + thirdH), gridStroke)
+                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + 2 * thirdH), Offset(cropRect.right, cropRect.top + 2 * thirdH), gridStroke)
+
+                        // 5. Corner Handles (thick L-shapes)
+                        val hLen = 22.dp.toPx()
+                        val hThick = 4.dp.toPx()
+                        val accentColor = Color.White
+
+                        // Top-Left
+                        drawLine(accentColor, cropRect.topLeft, cropRect.topLeft + Offset(hLen, 0f), hThick)
+                        drawLine(accentColor, cropRect.topLeft, cropRect.topLeft + Offset(0f, hLen), hThick)
+
+                        // Top-Right
+                        drawLine(accentColor, cropRect.topRight, cropRect.topRight + Offset(-hLen, 0f), hThick)
+                        drawLine(accentColor, cropRect.topRight, cropRect.topRight + Offset(0f, hLen), hThick)
+
+                        // Bottom-Left
+                        drawLine(accentColor, cropRect.bottomLeft, cropRect.bottomLeft + Offset(hLen, 0f), hThick)
+                        drawLine(accentColor, cropRect.bottomLeft, cropRect.bottomLeft + Offset(0f, -hLen), hThick)
+
+                        // Bottom-Right
+                        drawLine(accentColor, cropRect.bottomRight, cropRect.bottomRight + Offset(-hLen, 0f), hThick)
+                        drawLine(accentColor, cropRect.bottomRight, cropRect.bottomRight + Offset(0f, -hLen), hThick)
+
+                        // 6. Edge Handles (centered pill indicators)
+                        val edgeBarLen = 28.dp.toPx()
+                        val edgeBarThick = 4.dp.toPx()
+
+                        // Top edge
+                        val topMid = Offset(cropRect.left + cropRect.width / 2f, cropRect.top)
+                        drawLine(accentColor, topMid - Offset(edgeBarLen / 2f, 0f), topMid + Offset(edgeBarLen / 2f, 0f), edgeBarThick)
+
+                        // Bottom edge
+                        val bottomMid = Offset(cropRect.left + cropRect.width / 2f, cropRect.bottom)
+                        drawLine(accentColor, bottomMid - Offset(edgeBarLen / 2f, 0f), bottomMid + Offset(edgeBarLen / 2f, 0f), edgeBarThick)
+
+                        // Left edge
+                        val leftMid = Offset(cropRect.left, cropRect.top + cropRect.height / 2f)
+                        drawLine(accentColor, leftMid - Offset(0f, edgeBarLen / 2f), leftMid + Offset(0f, edgeBarLen / 2f), edgeBarThick)
+
+                        // Right edge
+                        val rightMid = Offset(cropRect.right, cropRect.top + cropRect.height / 2f)
+                        drawLine(accentColor, rightMid - Offset(0f, edgeBarLen / 2f), rightMid + Offset(0f, edgeBarLen / 2f), edgeBarThick)
                     }
                 }
-        ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val imageWidth = bitmap.width.toFloat()
-                val imageHeight = bitmap.height.toFloat()
-
-                val baseScale = minOf(screenWidthPx / imageWidth, screenHeightPx / imageHeight)
-                val drawWidth = imageWidth * baseScale * scale
-                val drawHeight = imageHeight * baseScale * scale
-
-                val centerX = screenWidthPx / 2f + offset.x
-                val centerY = screenHeightPx / 2f + offset.y
-
-                val drawRect = Rect(
-                    left = centerX - drawWidth / 2f,
-                    top = centerY - drawHeight / 2f,
-                    right = centerX + drawWidth / 2f,
-                    bottom = centerY + drawHeight / 2f
-                )
-
-                drawImage(
-                    image = bitmap.asImageBitmap(),
-                    dstSize = IntSize(drawWidth.toInt(), drawHeight.toInt()),
-                    dstOffset = IntOffset(drawRect.left.toInt(), drawRect.top.toInt())
-                )
-
-                // Dark semi-transparent scrim with 1:1 clear square cutout
-                val fullPath = Path().apply { addRect(Rect(0f, 0f, screenWidthPx, screenHeightPx)) }
-                val cropPath = Path().apply { addRoundRect(RoundRect(cropRectPx, CornerRadius(16f, 16f))) }
-                val overlayPath = Path.combine(PathOperation.Difference, fullPath, cropPath)
-
-                drawPath(overlayPath, Color.Black.copy(alpha = 0.7f))
-                drawRoundRect(
-                    color = Color.White,
-                    topLeft = cropRectPx.topLeft,
-                    size = Size(cropRectPx.width, cropRectPx.height),
-                    cornerRadius = CornerRadius(16f, 16f),
-                    style = Stroke(width = 3f)
-                )
-            }
-        }
-
-        // Header
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Crop Photo: $itemName",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = "Pinch to zoom, drag to position product in square frame",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-        }
-
-        // Bottom Action Controls
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(24.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedIconButton(
-                onClick = onCancel,
-                modifier = Modifier.size(56.dp),
-                shape = CircleShape,
-                colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = Color.White)
-            ) {
-                Icon(Icons.Default.Close, contentDescription = "Cancel")
             }
 
-            Button(
-                onClick = {
-                    val croppedBitmap = cropBitmap(
-                        source = bitmap,
-                        scale = scale,
-                        offset = offset,
-                        screenWidthPx = screenWidthPx,
-                        screenHeightPx = screenHeightPx,
-                        cropRectPx = cropRectPx
-                    )
-                    val outputStream = ByteArrayOutputStream()
-                    croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
-                    val bytes = outputStream.toByteArray()
-                    onCropSaved(bytes, croppedBitmap)
-                },
-                modifier = Modifier.height(56.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            // Bottom Action Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Check, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Save & Apply Photo", fontWeight = FontWeight.Bold)
+                OutlinedIconButton(
+                    onClick = onCancel,
+                    modifier = Modifier.size(56.dp),
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.outlinedIconButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Cancel")
+                }
+
+                Button(
+                    onClick = {
+                        if (cropRect != Rect.Zero && imageDisplayRect != Rect.Zero) {
+                            val croppedBitmap = cropBitmap(
+                                source = bitmap,
+                                cropRect = cropRect,
+                                imageDisplayRect = imageDisplayRect
+                            )
+                            val outputStream = ByteArrayOutputStream()
+                            croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+                            val bytes = outputStream.toByteArray()
+                            onCropSaved(bytes, croppedBitmap)
+                        }
+                    },
+                    modifier = Modifier.height(56.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Save & Apply Photo", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -177,25 +364,19 @@ fun ImageCropScreen(
 
 private fun cropBitmap(
     source: Bitmap,
-    scale: Float,
-    offset: Offset,
-    screenWidthPx: Float,
-    screenHeightPx: Float,
-    cropRectPx: Rect
+    cropRect: Rect,
+    imageDisplayRect: Rect
 ): Bitmap {
     val srcWidth = source.width.toFloat()
     val srcHeight = source.height.toFloat()
 
-    val baseScale = minOf(screenWidthPx / srcWidth, screenHeightPx / srcHeight)
-    val totalScale = baseScale * scale
+    val scaleX = srcWidth / imageDisplayRect.width
+    val scaleY = srcHeight / imageDisplayRect.height
 
-    val drawnLeft = screenWidthPx / 2f + offset.x - (srcWidth * totalScale) / 2f
-    val drawnTop = screenHeightPx / 2f + offset.y - (srcHeight * totalScale) / 2f
-
-    val srcCropLeft = ((cropRectPx.left - drawnLeft) / totalScale).coerceIn(0f, srcWidth - 1f)
-    val srcCropTop = ((cropRectPx.top - drawnTop) / totalScale).coerceIn(0f, srcHeight - 1f)
-    val srcCropRight = ((cropRectPx.right - drawnLeft) / totalScale).coerceIn(srcCropLeft + 1f, srcWidth)
-    val srcCropBottom = ((cropRectPx.bottom - drawnTop) / totalScale).coerceIn(srcCropTop + 1f, srcHeight)
+    val srcCropLeft = ((cropRect.left - imageDisplayRect.left) * scaleX).coerceIn(0f, srcWidth - 1f)
+    val srcCropTop = ((cropRect.top - imageDisplayRect.top) * scaleY).coerceIn(0f, srcHeight - 1f)
+    val srcCropRight = ((cropRect.right - imageDisplayRect.left) * scaleX).coerceIn(srcCropLeft + 1f, srcWidth)
+    val srcCropBottom = ((cropRect.bottom - imageDisplayRect.top) * scaleY).coerceIn(srcCropTop + 1f, srcHeight)
 
     val cropW = (srcCropRight - srcCropLeft).toInt().coerceAtLeast(1)
     val cropH = (srcCropBottom - srcCropTop).toInt().coerceAtLeast(1)
@@ -208,5 +389,14 @@ private fun cropBitmap(
         cropH
     )
 
-    return Bitmap.createScaledBitmap(cropped, 500, 500, true)
+    // Limit maximum dimension to 1200px while maintaining the exact cropped aspect ratio
+    val maxDim = maxOf(cropped.width, cropped.height)
+    return if (maxDim > 1200) {
+        val scale = 1200f / maxDim
+        val targetW = (cropped.width * scale).toInt().coerceAtLeast(1)
+        val targetH = (cropped.height * scale).toInt().coerceAtLeast(1)
+        Bitmap.createScaledBitmap(cropped, targetW, targetH, true)
+    } else {
+        cropped
+    }
 }
