@@ -4,7 +4,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,18 +25,65 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.exifinterface.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
-import kotlin.math.min
+import kotlin.math.sqrt
 
 enum class DragHandle {
-    NONE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, CENTER
+    NONE, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
+}
+
+private fun detectDragHandle(
+    touch: Offset,
+    cropRect: Rect,
+    cornerTouchRadius: Float,
+    edgeTouchMargin: Float
+): DragHandle {
+    fun distance(p1: Offset, p2: Offset): Float {
+        val dx = p1.x - p2.x
+        val dy = p1.y - p2.y
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    if (distance(touch, cropRect.topLeft) <= cornerTouchRadius) return DragHandle.TOP_LEFT
+    if (distance(touch, cropRect.topRight) <= cornerTouchRadius) return DragHandle.TOP_RIGHT
+    if (distance(touch, cropRect.bottomLeft) <= cornerTouchRadius) return DragHandle.BOTTOM_LEFT
+    if (distance(touch, cropRect.bottomRight) <= cornerTouchRadius) return DragHandle.BOTTOM_RIGHT
+
+    if (touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.top + edgeTouchMargin) &&
+        touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.right + edgeTouchMargin)
+    ) {
+        return DragHandle.TOP
+    }
+    if (touch.y in (cropRect.bottom - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin) &&
+        touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.right + edgeTouchMargin)
+    ) {
+        return DragHandle.BOTTOM
+    }
+    if (touch.x in (cropRect.left - edgeTouchMargin)..(cropRect.left + edgeTouchMargin) &&
+        touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin)
+    ) {
+        return DragHandle.LEFT
+    }
+    if (touch.x in (cropRect.right - edgeTouchMargin)..(cropRect.right + edgeTouchMargin) &&
+        touch.y in (cropRect.top - edgeTouchMargin)..(cropRect.bottom + edgeTouchMargin)
+    ) {
+        return DragHandle.RIGHT
+    }
+
+    if (cropRect.contains(touch)) {
+        return DragHandle.CENTER
+    }
+
+    return DragHandle.NONE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,6 +108,11 @@ fun ImageCropperDialog(
     var imageDisplayRect by remember { mutableStateOf(Rect.Zero) }
     var activeHandle by remember { mutableStateOf(DragHandle.NONE) }
 
+    val density = LocalDensity.current
+    val cornerTouchRadius = remember(density) { with(density) { 36.dp.toPx() } }
+    val edgeTouchMargin = remember(density) { with(density) { 24.dp.toPx() } }
+    val minCropSize = remember(density) { with(density) { 60.dp.toPx() } }
+
     LaunchedEffect(containerSize) {
         if (containerSize.width > 0 && containerSize.height > 0 && cropRect == Rect.Zero) {
             val imgAspect = bitmap.width.toFloat() / bitmap.height.toFloat()
@@ -75,11 +126,17 @@ fun ImageCropperDialog(
                 displayH = containerSize.height.toFloat()
                 displayW = displayH * imgAspect
             }
-            val left = (containerSize.width - displayW) / 2
-            val top = (containerSize.height - displayH) / 2
+            val left = (containerSize.width - displayW) / 2f
+            val top = (containerSize.height - displayH) / 2f
             imageDisplayRect = Rect(left, top, left + displayW, top + displayH)
-            val cropSize = min(displayW, displayH) * 0.8f
-            cropRect = Rect(center = imageDisplayRect.center, radius = cropSize / 2)
+            val cropW = displayW * 0.85f
+            val cropH = displayH * 0.85f
+            cropRect = Rect(
+                left = imageDisplayRect.left + (displayW - cropW) / 2f,
+                top = imageDisplayRect.top + (displayH - cropH) / 2f,
+                right = imageDisplayRect.left + (displayW + cropW) / 2f,
+                bottom = imageDisplayRect.top + (displayH + cropH) / 2f
+            )
         }
     }
 
@@ -100,14 +157,17 @@ fun ImageCropperDialog(
                 )
             },
             bottomBar = {
-                // FIXED HEIGHT BOTTOM AREA to strictly clear navigation buttons
                 Surface(
                     color = Color.Black.copy(alpha = 0.9f),
-                    modifier = Modifier.fillMaxWidth().height(200.dp) // MASSIVE FIXED HEIGHT
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
                 ) {
                     Box(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 32.dp),
-                        contentAlignment = Alignment.TopCenter // Put button at the TOP of this massive area
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Button(
                             onClick = {
@@ -120,10 +180,10 @@ fun ImageCropperDialog(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow, contentColor = Color.Black),
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().height(64.dp),
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
                             elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(32.dp))
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(28.dp))
                             Spacer(Modifier.width(12.dp))
                             Text("SAVE PHOTO", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
                         }
@@ -141,52 +201,86 @@ fun ImageCropperDialog(
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
+                            .pointerInput(imageDisplayRect, cropRect) {
                                 detectDragGestures(
                                     onDragStart = { touch ->
-                                        val handleSize = 40.dp.toPx()
-                                        activeHandle = when {
-                                            touch.x in (cropRect.left - handleSize)..(cropRect.left + handleSize) && touch.y in (cropRect.top - handleSize)..(cropRect.top + handleSize) -> DragHandle.TOP_LEFT
-                                            touch.x in (cropRect.right - handleSize)..(cropRect.right + handleSize) && touch.y in (cropRect.top - handleSize)..(cropRect.top + handleSize) -> DragHandle.TOP_RIGHT
-                                            touch.x in (cropRect.left - handleSize)..(cropRect.left + handleSize) && touch.y in (cropRect.bottom - handleSize)..(cropRect.bottom + handleSize) -> DragHandle.BOTTOM_LEFT
-                                            touch.x in (cropRect.right - handleSize)..(cropRect.right + handleSize) && touch.y in (cropRect.bottom - handleSize)..(cropRect.bottom + handleSize) -> DragHandle.BOTTOM_RIGHT
-                                            cropRect.contains(touch) -> DragHandle.CENTER
-                                            else -> DragHandle.NONE
-                                        }
+                                        activeHandle = detectDragHandle(
+                                            touch = touch,
+                                            cropRect = cropRect,
+                                            cornerTouchRadius = cornerTouchRadius,
+                                            edgeTouchMargin = edgeTouchMargin
+                                        )
                                     },
                                     onDragEnd = { activeHandle = DragHandle.NONE },
                                     onDragCancel = { activeHandle = DragHandle.NONE },
                                     onDrag = { change, dragAmount ->
                                         change.consume()
                                         if (activeHandle == DragHandle.NONE) return@detectDragGestures
-                                        var newRect = cropRect
+                                        var left = cropRect.left
+                                        var top = cropRect.top
+                                        var right = cropRect.right
+                                        var bottom = cropRect.bottom
+
                                         when (activeHandle) {
-                                            DragHandle.TOP_LEFT -> newRect = Rect(left = (cropRect.left + dragAmount.x).coerceIn(imageDisplayRect.left, cropRect.right - 50f), top = (cropRect.top + dragAmount.y).coerceIn(imageDisplayRect.top, cropRect.bottom - 50f), right = cropRect.right, bottom = cropRect.bottom)
-                                            DragHandle.TOP_RIGHT -> newRect = Rect(left = cropRect.left, top = (cropRect.top + dragAmount.y).coerceIn(imageDisplayRect.top, cropRect.bottom - 50f), right = (cropRect.right + dragAmount.x).coerceIn(cropRect.left + 50f, imageDisplayRect.right), bottom = cropRect.bottom)
-                                            DragHandle.BOTTOM_LEFT -> newRect = Rect(left = (cropRect.left + dragAmount.x).coerceIn(imageDisplayRect.left, cropRect.right - 50f), top = cropRect.top, right = cropRect.right, bottom = (cropRect.bottom + dragAmount.y).coerceIn(cropRect.top + 50f, imageDisplayRect.bottom))
-                                            DragHandle.BOTTOM_RIGHT -> newRect = Rect(left = cropRect.left, top = cropRect.top, right = (cropRect.right + dragAmount.x).coerceIn(cropRect.left + 50f, imageDisplayRect.right), bottom = (cropRect.bottom + dragAmount.y).coerceIn(cropRect.top + 50f, imageDisplayRect.bottom))
+                                            DragHandle.TOP_LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            DragHandle.TOP_RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            DragHandle.BOTTOM_LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            DragHandle.BOTTOM_RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            DragHandle.TOP -> {
+                                                top = (top + dragAmount.y).coerceIn(imageDisplayRect.top, bottom - minCropSize)
+                                            }
+                                            DragHandle.BOTTOM -> {
+                                                bottom = (bottom + dragAmount.y).coerceIn(top + minCropSize, imageDisplayRect.bottom)
+                                            }
+                                            DragHandle.LEFT -> {
+                                                left = (left + dragAmount.x).coerceIn(imageDisplayRect.left, right - minCropSize)
+                                            }
+                                            DragHandle.RIGHT -> {
+                                                right = (right + dragAmount.x).coerceIn(left + minCropSize, imageDisplayRect.right)
+                                            }
                                             DragHandle.CENTER -> {
                                                 val dx = dragAmount.x; val dy = dragAmount.y
-                                                val clampedDx = if (cropRect.left + dx < imageDisplayRect.left) imageDisplayRect.left - cropRect.left else if (cropRect.right + dx > imageDisplayRect.right) imageDisplayRect.right - cropRect.right else dx
-                                                val clampedDy = if (cropRect.top + dy < imageDisplayRect.top) imageDisplayRect.top - cropRect.top else if (cropRect.bottom + dy > imageDisplayRect.bottom) imageDisplayRect.bottom - cropRect.bottom else dy
-                                                newRect = cropRect.translate(clampedDx, clampedDy)
+                                                val clampedDx = if (left + dx < imageDisplayRect.left) imageDisplayRect.left - left
+                                                    else if (right + dx > imageDisplayRect.right) imageDisplayRect.right - right
+                                                    else dx
+                                                val clampedDy = if (top + dy < imageDisplayRect.top) imageDisplayRect.top - top
+                                                    else if (bottom + dy > imageDisplayRect.bottom) imageDisplayRect.bottom - bottom
+                                                    else dy
+                                                left += clampedDx; right += clampedDx
+                                                top += clampedDy; bottom += clampedDy
                                             }
                                             DragHandle.NONE -> {}
                                         }
-                                        cropRect = newRect
+                                        cropRect = Rect(left, top, right, bottom)
                                     }
                                 )
                             }
                     ) {
                         drawImage(image = bitmap.asImageBitmap(), dstOffset = IntOffset(imageDisplayRect.left.toInt(), imageDisplayRect.top.toInt()), dstSize = IntSize(imageDisplayRect.width.toInt(), imageDisplayRect.height.toInt()))
-                        clipPath(Path().apply { addRect(cropRect) }, clipOp = ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.6f)) }
+                        clipPath(Path().apply { addRect(cropRect) }, clipOp = ClipOp.Difference) { drawRect(Color.Black.copy(alpha = 0.65f)) }
                         drawRect(color = Color.Yellow, topLeft = cropRect.topLeft, size = cropRect.size, style = Stroke(width = 2.dp.toPx()))
-                        val gridColor = Color.Yellow.copy(alpha = 0.5f)
-                        drawLine(gridColor, Offset(cropRect.left + cropRect.width/3, cropRect.top), Offset(cropRect.left + cropRect.width/3, cropRect.bottom), 1.dp.toPx())
-                        drawLine(gridColor, Offset(cropRect.left + 2*cropRect.width/3, cropRect.top), Offset(cropRect.left + 2*cropRect.width/3, cropRect.bottom), 1.dp.toPx())
-                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + cropRect.height/3), Offset(cropRect.right, cropRect.top + cropRect.height/3), 1.dp.toPx())
-                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + 2*cropRect.height/3), Offset(cropRect.right, cropRect.top + 2*cropRect.height/3), 1.dp.toPx())
-                        val hLen = 24.dp.toPx(); val hThick = 4.dp.toPx()
+
+                        val gridColor = Color.Yellow.copy(alpha = 0.4f)
+                        val thirdW = cropRect.width / 3f
+                        val thirdH = cropRect.height / 3f
+                        drawLine(gridColor, Offset(cropRect.left + thirdW, cropRect.top), Offset(cropRect.left + thirdW, cropRect.bottom), 1.dp.toPx())
+                        drawLine(gridColor, Offset(cropRect.left + 2 * thirdW, cropRect.top), Offset(cropRect.left + 2 * thirdW, cropRect.bottom), 1.dp.toPx())
+                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + thirdH), Offset(cropRect.right, cropRect.top + thirdH), 1.dp.toPx())
+                        drawLine(gridColor, Offset(cropRect.left, cropRect.top + 2 * thirdH), Offset(cropRect.right, cropRect.top + 2 * thirdH), 1.dp.toPx())
+
+                        val hLen = 22.dp.toPx(); val hThick = 4.dp.toPx()
                         drawLine(Color.Yellow, cropRect.topLeft, cropRect.topLeft + Offset(hLen, 0f), hThick)
                         drawLine(Color.Yellow, cropRect.topLeft, cropRect.topLeft + Offset(0f, hLen), hThick)
                         drawLine(Color.Yellow, cropRect.topRight, cropRect.topRight + Offset(-hLen, 0f), hThick)
@@ -195,6 +289,16 @@ fun ImageCropperDialog(
                         drawLine(Color.Yellow, cropRect.bottomLeft, cropRect.bottomLeft + Offset(0f, -hLen), hThick)
                         drawLine(Color.Yellow, cropRect.bottomRight, cropRect.bottomRight + Offset(-hLen, 0f), hThick)
                         drawLine(Color.Yellow, cropRect.bottomRight, cropRect.bottomRight + Offset(0f, -hLen), hThick)
+
+                        val edgeBarLen = 28.dp.toPx(); val edgeBarThick = 4.dp.toPx()
+                        val topMid = Offset(cropRect.left + cropRect.width / 2f, cropRect.top)
+                        drawLine(Color.Yellow, topMid - Offset(edgeBarLen / 2f, 0f), topMid + Offset(edgeBarLen / 2f, 0f), edgeBarThick)
+                        val bottomMid = Offset(cropRect.left + cropRect.width / 2f, cropRect.bottom)
+                        drawLine(Color.Yellow, bottomMid - Offset(edgeBarLen / 2f, 0f), bottomMid + Offset(edgeBarLen / 2f, 0f), edgeBarThick)
+                        val leftMid = Offset(cropRect.left, cropRect.top + cropRect.height / 2f)
+                        drawLine(Color.Yellow, leftMid - Offset(0f, edgeBarLen / 2f), leftMid + Offset(0f, edgeBarLen / 2f), edgeBarThick)
+                        val rightMid = Offset(cropRect.right, cropRect.top + cropRect.height / 2f)
+                        drawLine(Color.Yellow, rightMid - Offset(0f, edgeBarLen / 2f), rightMid + Offset(0f, edgeBarLen / 2f), edgeBarThick)
                     }
                 }
             }
@@ -213,13 +317,13 @@ private fun performActualCrop(bitmap: Bitmap, cropRect: Rect, imageDisplayRect: 
 }
 
 private fun fixRotation(path: String, bitmap: Bitmap): Bitmap {
-    val exif = androidx.exifinterface.media.ExifInterface(path)
-    val orientation = exif.getAttributeInt(androidx.exifinterface.media.ExifInterface.TAG_ORIENTATION, androidx.exifinterface.media.ExifInterface.ORIENTATION_UNDEFINED)
+    val exif = ExifInterface(path)
+    val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)
     val matrix = Matrix()
     when (orientation) {
-        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
-        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
-        androidx.exifinterface.media.ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
+        ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
+        ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
+        ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
     }
-    return if (orientation != androidx.exifinterface.media.ExifInterface.ORIENTATION_UNDEFINED) { Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) } else { bitmap }
+    return if (orientation != ExifInterface.ORIENTATION_UNDEFINED) { Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true) } else { bitmap }
 }
