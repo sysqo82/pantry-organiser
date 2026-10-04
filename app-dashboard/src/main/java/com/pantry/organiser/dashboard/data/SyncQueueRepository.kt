@@ -13,12 +13,13 @@ import javax.inject.Singleton
 class SyncQueueRepository @Inject constructor(
     private val syncService: SyncService,
     private val offRepository: OpenFoodFactsRepository,
-    private val syncQueueDao: SyncQueueDao
+    private val syncQueueDao: SyncQueueDao,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
         Log.e("SyncQueue", "Unhandled exception in SyncQueue scope: ${throwable.message}")
     }
-    private val scope = CoroutineScope(Dispatchers.IO + exceptionHandler)
+    private val scope = CoroutineScope(ioDispatcher + exceptionHandler)
 
     private var observeJob: Job? = null
 
@@ -165,12 +166,11 @@ class SyncQueueRepository @Inject constructor(
     }
 
     suspend fun clearPendingItem(item: SyncQueueItem) {
-        syncQueueDao.deleteByIdOrItemId(item.id, item.itemId)
-        syncQueueDao.markAsProcessed(item.id)
+        syncQueueDao.markAsProcessedByIdOrItemId(item.id, item.itemId)
     }
 
     suspend fun clearAllPendingItems() {
-        syncQueueDao.clearAll()
+        syncQueueDao.markAllAsProcessed()
     }
 
     suspend fun clearProcessed() {

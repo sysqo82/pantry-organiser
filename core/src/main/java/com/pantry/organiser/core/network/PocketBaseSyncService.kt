@@ -119,6 +119,11 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+                        Log.e("PocketBaseSync", "Realtime stream error for $pantryId. Status: ${response.status}, Body: $errorBody")
+                        throw Exception("HTTP ${response.status}: $errorBody")
+                    }
                     retryDelay = 5000L
                     Log.d("PocketBaseSync", "Realtime stream opened for $pantryId. Status: ${response.status}")
                     val channel = response.bodyAsChannel()
@@ -160,6 +165,8 @@ class PocketBaseSyncService(
                         }
                     }
                 }
+                Log.d("PocketBaseSync", "Realtime stream closed for $pantryId. Reconnecting in ${retryDelay / 1000}s...")
+                delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
                 val isNetworkDown = e is UnknownHostException ||
@@ -449,6 +456,11 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+                        Log.e("PocketBaseSync", "Realtime pantry_items stream error. Status: ${response.status}, Body: $errorBody")
+                        throw Exception("HTTP ${response.status}: $errorBody")
+                    }
                     retryDelay = 5000L
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
@@ -489,6 +501,8 @@ class PocketBaseSyncService(
                         }
                     }
                 }
+                Log.d("PocketBaseSync", "Realtime pantry_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
                 val isNetworkDown = e is UnknownHostException ||
@@ -527,6 +541,11 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (!response.status.isSuccess()) {
+                        val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
+                        Log.e("PocketBaseSync", "Realtime past_items stream error. Status: ${response.status}, Body: $errorBody")
+                        throw Exception("HTTP ${response.status}: $errorBody")
+                    }
                     retryDelay = 5000L
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
@@ -563,6 +582,8 @@ class PocketBaseSyncService(
                         }
                     }
                 }
+                Log.d("PocketBaseSync", "Realtime past_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
                 val isNetworkDown = e is UnknownHostException ||
