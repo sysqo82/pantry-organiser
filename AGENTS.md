@@ -4,6 +4,11 @@ ALWAYS!!!!!!!! run the entire suite of tests after every code change, ALWAYS!!!!
 Never EVER touch anything out of the scope of fix, feature or refactor code
 If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\projects\skills` directory. Always refer to that path to read skill instructions.
 
+### Versioning and PR Rules:
+1. The version must be bumped *with the creation of the branch* (not when committing the code). This means any changes made on the branch include the updated version.
+2. Before committing the code, a new version must be assigned to the prod version of the app(s) that were changed.
+3. Commit the whole thing as one big PR (one branch commit).
+
 ## Agent skills
 
 ### Issue tracker
