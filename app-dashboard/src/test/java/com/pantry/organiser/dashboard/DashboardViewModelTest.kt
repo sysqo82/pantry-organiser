@@ -31,6 +31,10 @@ class DashboardViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        mockkStatic(android.util.Log::class)
+        every { android.util.Log.d(any(), any()) } returns 0
+        every { android.util.Log.e(any(), any()) } returns 0
+        every { android.util.Log.e(any(), any(), any()) } returns 0
         every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
         every { pantryRepository.allItems } returns flowOf(emptyList())
         viewModel = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
@@ -38,6 +42,8 @@ class DashboardViewModelTest {
 
     @After
     fun tearDown() {
+        clearAllMocks()
+        unmockkStatic(android.util.Log::class)
         Dispatchers.resetMain()
     }
 
@@ -731,5 +737,25 @@ class DashboardViewModelTest {
         assertEquals(4, saved.shelfNumber)
         assertEquals(2, saved.zoneIndex)
         assertEquals(FillLevel.FULL, saved.activeFill)
+    }
+
+    @Test
+    fun `saveEditedItem updates item trackingType correctly`() = runTest {
+        val item = PantryItem(
+            id = "item_1",
+            name = "Quick Cook Fusilli",
+            shelfNumber = 3,
+            zoneIndex = 3,
+            trackingType = TrackingType.DISCRETE_COUNT
+        )
+
+        val updateSlot = slot<PantryItem>()
+        coEvery { pantryRepository.updateItem(capture(updateSlot)) } returns Unit
+
+        val updatedItem = item.copy(trackingType = TrackingType.BULK_LEVEL)
+        viewModel.saveEditedItem(updatedItem)
+
+        coVerify(exactly = 1) { pantryRepository.updateItem(any()) }
+        assertEquals(TrackingType.BULK_LEVEL, updateSlot.captured.trackingType)
     }
 }

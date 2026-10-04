@@ -282,16 +282,17 @@ class DashboardViewModel @Inject constructor(
 
     fun consumeItem(item: PantryItem, amount: Int = 1) {
         viewModelScope.launch {
-            if (item.unitsPerPack > 1) {
-                val totalUnits = (item.sealedCount * item.unitsPerPack) + item.activeCount
+            val freshItem = _uiState.value.pantryItems.find { it.id == item.id } ?: item
+            if (freshItem.unitsPerPack > 1) {
+                val totalUnits = (freshItem.sealedCount * freshItem.unitsPerPack) + freshItem.activeCount
                 val remainingUnits = totalUnits - amount
                 if (remainingUnits <= 0) {
-                    pantryRepository.moveToPastItems(item)
+                    pantryRepository.moveToPastItems(freshItem)
                     updateOverlayIfShowing(null)
                 } else {
-                    val newActiveCount = if (remainingUnits % item.unitsPerPack != 0) remainingUnits % item.unitsPerPack else item.unitsPerPack
-                    val newSealedCount = (remainingUnits - newActiveCount) / item.unitsPerPack
-                    val updated = item.copy(
+                    val newActiveCount = if (remainingUnits % freshItem.unitsPerPack != 0) remainingUnits % freshItem.unitsPerPack else freshItem.unitsPerPack
+                    val newSealedCount = (remainingUnits - newActiveCount) / freshItem.unitsPerPack
+                    val updated = freshItem.copy(
                         sealedCount = newSealedCount,
                         activeCount = newActiveCount,
                         updatedAt = System.currentTimeMillis()
@@ -299,37 +300,37 @@ class DashboardViewModel @Inject constructor(
                     pantryRepository.updateItem(updated)
                     updateOverlayIfShowing(updated)
                 }
-            } else if (item.trackingType == TrackingType.BULK_LEVEL) {
-                if (item.activeFill == FillLevel.EMPTY) {
-                    if (item.sealedCount > 0) {
-                        val updated = item.copy(
-                            sealedCount = item.sealedCount - 1,
+            } else if (freshItem.trackingType == TrackingType.BULK_LEVEL) {
+                if (freshItem.activeFill == FillLevel.EMPTY) {
+                    if (freshItem.sealedCount > 0) {
+                        val updated = freshItem.copy(
+                            sealedCount = freshItem.sealedCount - 1,
                             activeFill = FillLevel.FULL,
                             updatedAt = System.currentTimeMillis()
                         )
                         pantryRepository.updateItem(updated)
                         updateOverlayIfShowing(updated)
                     } else {
-                        pantryRepository.moveToPastItems(item)
+                        pantryRepository.moveToPastItems(freshItem)
                         updateOverlayIfShowing(null)
                     }
                 } else {
-                    val prevFill = item.activeFill.prev()
+                    val prevFill = freshItem.activeFill.prev()
                     if (prevFill == FillLevel.EMPTY) {
-                        if (item.sealedCount > 0) {
-                            val updated = item.copy(
-                                sealedCount = item.sealedCount - 1,
+                        if (freshItem.sealedCount > 0) {
+                            val updated = freshItem.copy(
+                                sealedCount = freshItem.sealedCount - 1,
                                 activeFill = FillLevel.FULL,
                                 updatedAt = System.currentTimeMillis()
                             )
                             pantryRepository.updateItem(updated)
                             updateOverlayIfShowing(updated)
                         } else {
-                            pantryRepository.moveToPastItems(item)
+                            pantryRepository.moveToPastItems(freshItem)
                             updateOverlayIfShowing(null)
                         }
                     } else {
-                        val updated = item.copy(
+                        val updated = freshItem.copy(
                             activeFill = prevFill,
                             updatedAt = System.currentTimeMillis()
                         )
@@ -337,13 +338,13 @@ class DashboardViewModel @Inject constructor(
                         updateOverlayIfShowing(updated)
                     }
                 }
-            } else if (item.trackingType == TrackingType.DISCRETE_COUNT) {
-                val newCount = item.sealedCount - amount
+            } else if (freshItem.trackingType == TrackingType.DISCRETE_COUNT) {
+                val newCount = freshItem.sealedCount - amount
                 if (newCount <= 0) {
-                    pantryRepository.moveToPastItems(item)
+                    pantryRepository.moveToPastItems(freshItem)
                     updateOverlayIfShowing(null)
                 } else {
-                    val updated = item.copy(sealedCount = newCount, updatedAt = System.currentTimeMillis())
+                    val updated = freshItem.copy(sealedCount = newCount, updatedAt = System.currentTimeMillis())
                     pantryRepository.updateItem(updated)
                     updateOverlayIfShowing(updated)
                 }
@@ -353,20 +354,21 @@ class DashboardViewModel @Inject constructor(
 
     fun restockItem(item: PantryItem) {
         viewModelScope.launch {
-            val updated = if (item.unitsPerPack > 1) {
-                if (item.activeCount == 0) {
-                    item.copy(activeCount = item.unitsPerPack, updatedAt = System.currentTimeMillis())
+            val freshItem = _uiState.value.pantryItems.find { it.id == item.id } ?: item
+            val updated = if (freshItem.unitsPerPack > 1) {
+                if (freshItem.activeCount == 0) {
+                    freshItem.copy(activeCount = freshItem.unitsPerPack, updatedAt = System.currentTimeMillis())
                 } else {
-                    item.copy(sealedCount = item.sealedCount + 1, updatedAt = System.currentTimeMillis())
+                    freshItem.copy(sealedCount = freshItem.sealedCount + 1, updatedAt = System.currentTimeMillis())
                 }
-            } else if (item.trackingType == TrackingType.BULK_LEVEL) {
-                if (item.activeFill == FillLevel.EMPTY) {
-                    item.copy(activeFill = FillLevel.FULL, updatedAt = System.currentTimeMillis())
+            } else if (freshItem.trackingType == TrackingType.BULK_LEVEL) {
+                if (freshItem.activeFill == FillLevel.EMPTY) {
+                    freshItem.copy(activeFill = FillLevel.FULL, updatedAt = System.currentTimeMillis())
                 } else {
-                    item.copy(sealedCount = item.sealedCount + 1, updatedAt = System.currentTimeMillis())
+                    freshItem.copy(sealedCount = freshItem.sealedCount + 1, updatedAt = System.currentTimeMillis())
                 }
             } else {
-                item.copy(sealedCount = item.sealedCount + 1, updatedAt = System.currentTimeMillis())
+                freshItem.copy(sealedCount = freshItem.sealedCount + 1, updatedAt = System.currentTimeMillis())
             }
             pantryRepository.updateItem(updated)
             updateOverlayIfShowing(updated)
@@ -375,41 +377,45 @@ class DashboardViewModel @Inject constructor(
 
     fun updateFillLevel(item: PantryItem, fillLevel: FillLevel) {
         viewModelScope.launch {
+            val freshItem = _uiState.value.pantryItems.find { it.id == item.id } ?: item
             if (fillLevel == FillLevel.EMPTY) {
-                if (item.sealedCount > 0) {
-                    val updated = item.copy(
-                        sealedCount = item.sealedCount - 1,
+                if (freshItem.sealedCount > 0) {
+                    val updated = freshItem.copy(
+                        sealedCount = freshItem.sealedCount - 1,
                         activeFill = FillLevel.FULL,
                         updatedAt = System.currentTimeMillis()
                     )
                     pantryRepository.updateItem(updated)
                     updateOverlayIfShowing(updated)
                 } else {
-                    pantryRepository.moveToPastItems(item)
+                    pantryRepository.moveToPastItems(freshItem)
                     updateOverlayIfShowing(null)
                 }
             } else {
-                val updated = item.copy(activeFill = fillLevel, updatedAt = System.currentTimeMillis())
+                val updated = freshItem.copy(activeFill = fillLevel, updatedAt = System.currentTimeMillis())
                 pantryRepository.updateItem(updated)
                 updateOverlayIfShowing(updated)
             }
         }
     }
 
-    fun editItem(item: PantryItem) {
-        _uiState.update { it.copy(activeOverlay = OverlayContext.ItemEdit(item)) }
-    }
-
-    fun saveEditedItem(updatedItem: PantryItem) {
+    fun deleteItem(item: PantryItem) {
         viewModelScope.launch {
-            pantryRepository.updateItem(updatedItem)
+            val freshItem = _uiState.value.pantryItems.find { it.id == item.id } ?: item
+            pantryRepository.moveToPastItems(freshItem)
             _uiState.update { it.copy(activeOverlay = null) }
         }
     }
 
-    fun deleteItem(item: PantryItem) {
+    fun editItem(item: PantryItem) {
+        val freshItem = _uiState.value.pantryItems.find { it.id == item.id } ?: item
+        _uiState.update { it.copy(activeOverlay = OverlayContext.ItemEdit(freshItem)) }
+    }
+
+    fun saveEditedItem(updatedItem: PantryItem) {
         viewModelScope.launch {
-            pantryRepository.moveToPastItems(item)
+            android.util.Log.d("DashboardVM", "saveEditedItem: saving ${updatedItem.name} (${updatedItem.id}) with trackingType=${updatedItem.trackingType}")
+            pantryRepository.updateItem(updatedItem)
             _uiState.update { it.copy(activeOverlay = null) }
         }
     }
