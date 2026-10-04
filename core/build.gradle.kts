@@ -20,6 +20,19 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            buildConfigField("String", "POCKETBASE_URL", "\"https://pantry.lockpc.co.uk\"")
+        }
+        debug {
+            buildConfigField("String", "POCKETBASE_URL", "\"https://dev-pantry.lockpc.co.uk\"")
+        }
+    }
 }
 
 dependencies {

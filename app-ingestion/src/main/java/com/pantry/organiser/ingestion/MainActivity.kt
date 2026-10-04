@@ -51,6 +51,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        viewModel.startRealtimeSync()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.stopRealtimeSync()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)

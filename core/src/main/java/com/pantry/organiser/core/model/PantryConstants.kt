@@ -1,7 +1,9 @@
 package com.pantry.organiser.core.model
 
+import com.pantry.organiser.core.BuildConfig
+
 object PantryConstants {
-    const val POCKETBASE_URL = "https://pantry.lockpc.co.uk"
+    val POCKETBASE_URL = BuildConfig.POCKETBASE_URL
     const val TOTAL_SHELVES = 4
     const val ZONES_PER_SHELF = 3
 
