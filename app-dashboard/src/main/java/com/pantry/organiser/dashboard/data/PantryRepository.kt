@@ -92,7 +92,7 @@ class PantryRepository @Inject constructor(
                         syncService.updatePantryItem(updatedPrimary)
                     }
 
-                    pantryDao.insertItems(remoteItems)
+                    remoteItems.forEach { mergeAndInsert(it) }
                 }
 
                 val remotePastItems = try { syncService.fetchPastItems() } catch (e: Exception) { emptyList() }
@@ -102,6 +102,42 @@ class PantryRepository @Inject constructor(
             } catch (e: Exception) {
                 Log.e("PantryRepo", "Failed reconciliation of pantry_items: ${e.message}")
             }
+        }
+    }
+
+    private suspend fun mergeAndInsert(remoteItemBase: PantryItem) {
+        val existing = pantryDao.getItemById(remoteItemBase.id)
+        val trackingTypeToUse = existing?.trackingType ?: remoteItemBase.trackingType
+        val remoteItem = remoteItemBase.copy(trackingType = trackingTypeToUse)
+
+        if (existing != null) {
+            val preservedUri = existing.localImageUri ?: remoteItem.localImageUri
+            val isLocalNewer = existing.updatedAt >= remoteItem.updatedAt
+
+            Log.d("PantryRepo", "mergeAndInsert: ${remoteItem.name} (${remoteItem.id}) -> localUpdated=${existing.updatedAt}, remoteUpdated=${remoteItem.updatedAt}, isLocalNewer=$isLocalNewer, trackingTypeToUse=$trackingTypeToUse")
+
+            val effectiveFill = if (isLocalNewer) existing.activeFill else remoteItem.activeFill
+            val effectiveSealed = if (isLocalNewer) existing.sealedCount else remoteItem.sealedCount
+            val effectiveUnits = if (isLocalNewer) existing.unitsPerPack else remoteItem.unitsPerPack
+            val effectiveActiveCount = if (isLocalNewer) existing.activeCount else remoteItem.activeCount
+            val effectiveShelf = if (isLocalNewer) existing.shelfNumber else remoteItem.shelfNumber
+            val effectiveZone = if (isLocalNewer) existing.zoneIndex else remoteItem.zoneIndex
+
+            val merged = remoteItem.copy(
+                localImageUri = preservedUri,
+                trackingType = trackingTypeToUse,
+                activeFill = effectiveFill,
+                sealedCount = effectiveSealed,
+                unitsPerPack = effectiveUnits,
+                activeCount = effectiveActiveCount,
+                shelfNumber = effectiveShelf,
+                zoneIndex = effectiveZone,
+                updatedAt = if (isLocalNewer) existing.updatedAt else remoteItem.updatedAt
+            )
+            pantryDao.insertItem(merged)
+        } else {
+            Log.d("PantryRepo", "mergeAndInsert: inserting new remote item ${remoteItem.name} (${remoteItem.id}) with trackingType=${remoteItem.trackingType}")
+            pantryDao.insertItem(remoteItem)
         }
     }
 
@@ -115,7 +151,7 @@ class PantryRepository @Inject constructor(
                     remoteItem.barcode?.takeIf { it.isNotBlank() }?.let { barcode ->
                         pantryDao.deleteLocalItemsByBarcode(barcode)
                     }
-                    pantryDao.insertItem(remoteItem)
+                    mergeAndInsert(remoteItem)
                 }
             }
         }
@@ -151,10 +187,16 @@ class PantryRepository @Inject constructor(
     }
 
     suspend fun updateItem(item: PantryItem) {
+        Log.d("PantryRepo", "updateItem called for ${item.name} (${item.id}): trackingType=${item.trackingType}, updatedAt=${item.updatedAt}")
         pantryDao.updateItem(item)
         item.barcode?.let { removeFromPastItems(it) }
         scope.launch {
             val updated = syncService.updatePantryItem(item)
+            if (updated != null) {
+                Log.d("PantryRepo", "Successfully synced update for ${item.name} to server. Server returned trackingType=${updated.trackingType}")
+            } else {
+                Log.e("PantryRepo", "FAILED to sync update for ${item.name} to server!")
+            }
             if (updated != null && updated.id != item.id) {
                 pantryDao.deleteItem(item)
                 pantryDao.insertItem(updated)

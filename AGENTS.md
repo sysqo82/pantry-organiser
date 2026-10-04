@@ -6,7 +6,7 @@ If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\
 
 ### Versioning and PR Rules:
 1. The version must be bumped *with the creation of the branch* (not when committing the code). This means any changes made on the branch include the updated version.
-2. Before committing the code, a new version must be assigned to the prod version of the app(s) that were changed.
+2. Before committing the code, a new version must be assigned to the prod version of the app(s) that were changed. Because the project consists of multiple separate apps (`:app`, `:app-dashboard`, `:app-ingestion`), you must increase the version on the specific app(s) concerned by the feature/fix. If the change is common (affecting core models/shared logic), all apps must see a version increase.
 3. Commit the whole thing as one big PR (one branch commit).
 
 ## Agent skills

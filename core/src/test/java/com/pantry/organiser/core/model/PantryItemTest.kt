@@ -25,6 +25,7 @@ class PantryItemTest {
         val bucatini = PantryItem.determineTrackingType(name = "N-Bucatini n°9", quantity = "500g")
         val penne = PantryItem.determineTrackingType(name = "Barilla Penne Rigate", quantity = "500g")
         val fusilli = PantryItem.determineTrackingType(name = "Fusilli", quantity = "500g")
+        val quickCookFusilli = PantryItem.determineTrackingType(name = "Quick Cook Fusilli", quantity = "500g")
         val rice = PantryItem.determineTrackingType(name = "Tilda Basmati Rice", quantity = "1kg")
 
         assertEquals(TrackingType.BULK_LEVEL, sugar)
@@ -33,6 +34,7 @@ class PantryItemTest {
         assertEquals(TrackingType.BULK_LEVEL, bucatini)
         assertEquals(TrackingType.BULK_LEVEL, penne)
         assertEquals(TrackingType.BULK_LEVEL, fusilli)
+        assertEquals(TrackingType.BULK_LEVEL, quickCookFusilli)
         assertEquals(TrackingType.BULK_LEVEL, rice)
     }
 

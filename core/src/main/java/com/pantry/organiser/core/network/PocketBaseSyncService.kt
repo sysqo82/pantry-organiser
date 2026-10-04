@@ -265,6 +265,7 @@ class PocketBaseSyncService(
                 }
                 val responseText = httpResponse.bodyAsText()
                 if (httpResponse.status.isSuccess()) {
+                    Log.d("PocketBaseSync", "Successfully updated pantry_item ${item.id} on server. Response: $responseText")
                     val response: PocketBasePantryItem = json.decodeFromString(responseText)
                     val updatedLocal = response.toLocal()
                     delay(250) // 250ms spacing between writes

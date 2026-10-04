@@ -70,17 +70,6 @@ class PantryViewModel(
     private fun performDataSanityCheck(items: List<PantryItem>): List<PantryItem> {
         return items.map { item ->
             var updated = item
-            
-            // 1. Re-classification check
-            val correctType = PantryItem.determineTrackingType(item.name, quantity = item.packageQuantity)
-            if (item.trackingType != correctType) {
-                android.util.Log.d("PantryVM", "Sanity Fix: Re-classifying ${item.name} to $correctType")
-                updated = updated.copy(trackingType = correctType)
-                // If switching to Discrete, ensure sealedCount is at least 1 if we had any active stock
-                if (correctType == TrackingType.DISCRETE_COUNT && updated.sealedCount == 0 && item.activeFill != FillLevel.EMPTY) {
-                    updated = updated.copy(sealedCount = 1)
-                }
-            }
 
             // 2. Multipack Detection check
             val correctUnitsPerPack = PantryItem.inferUnitsPerPack(item.name, item.packageQuantity)
