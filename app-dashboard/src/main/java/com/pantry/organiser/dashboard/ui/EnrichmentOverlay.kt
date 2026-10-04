@@ -22,11 +22,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.dashboard.data.SyncQueueItem
+import com.pantry.organiser.dashboard.ui.components.ProductThumbnail
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,20 +103,29 @@ fun EnrichmentOverlay(
                             .weight(1f, fill = false),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Left Column: Product Info & Quantity Selector
+                        // Left Column: Product Info Card (fills remaining top height) & Quantity Selector (Bottom, aligned with S1 row)
                         Column(
                             modifier = Modifier
                                 .weight(0.46f)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                                .height(242.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            ProductCardHeader(syncItem = syncItem, existingItem = existingItem, compact = true)
+                            ProductCardHeader(
+                                syncItem = syncItem, 
+                                existingItem = existingItem, 
+                                compact = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                            )
                             QuantitySelectorRow(quantity = quantityToAdd, onQuantityChange = { quantityToAdd = it }, compact = true)
                         }
 
                         // Right Column: Location Header & Shelf Grid
                         Column(
-                            modifier = Modifier.weight(0.54f),
+                            modifier = Modifier
+                                .weight(0.54f)
+                                .height(242.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             LocationLabelText(
@@ -130,7 +139,7 @@ fun EnrichmentOverlay(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(210.dp)
+                                    .weight(1f)
                             ) {
                                 PantryShelfGrid(
                                     selectedCell = selectedRow to selectedCol,
@@ -209,44 +218,75 @@ fun EnrichmentOverlay(
 private fun ProductCardHeader(
     syncItem: SyncQueueItem,
     existingItem: PantryItem?,
-    compact: Boolean
+    compact: Boolean,
+    modifier: Modifier = Modifier
 ) {
+    val productName = syncItem.productName?.takeIf { it.isNotBlank() }
+        ?: existingItem?.name
+        ?: "Unknown Product"
+    val brandText = syncItem.brand?.takeIf { it.isNotBlank() }
+        ?: existingItem?.brand
+    val quantityText = syncItem.quantity?.takeIf { it.isNotBlank() }
+        ?: existingItem?.packageQuantity
+
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
     ) {
         Row(
-            modifier = Modifier.padding(if (compact) 8.dp else 12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(if (compact) 12.dp else 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val displayImageUrl = syncItem.imageUrl ?: existingItem?.activeImageSource
-            if (displayImageUrl != null) {
-                AsyncImage(
-                    model = displayImageUrl,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(if (compact) 48.dp else 64.dp)
-                        .clip(RoundedCornerShape(6.dp)),
-                    contentScale = ContentScale.Fit
-                )
-                Spacer(Modifier.width(10.dp))
-            }
-            Column {
+            ProductThumbnail(
+                imageUrl = syncItem.imageUrl?.takeIf { it.isNotBlank() } ?: existingItem?.imageUrl,
+                apiImageUrl = existingItem?.apiImageUrl,
+                localImageUrl = existingItem?.localImageUrl,
+                localImageUri = existingItem?.localImageUri,
+                itemName = productName,
+                thumbnailSize = if (compact) null else 140.dp,
+                updatedAt = existingItem?.updatedAt ?: 0L,
+                contentScale = ContentScale.Fit,
+                modifier = if (compact) {
+                    Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(0.85f)
+                        .clip(RoundedCornerShape(12.dp))
+                } else {
+                    Modifier.clip(RoundedCornerShape(12.dp))
+                }
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(
-                    syncItem.productName ?: existingItem?.name ?: "Unknown Product",
-                    style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium,
+                    text = productName,
+                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
-                val brandText = syncItem.brand ?: existingItem?.brand
-                if (brandText != null) {
-                    Text(brandText, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                if (!brandText.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = brandText,
+                        style = if (compact) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-                val quantityText = syncItem.quantity ?: existingItem?.packageQuantity
-                if (quantityText != null) {
-                    Text(quantityText, style = MaterialTheme.typography.labelSmall)
+                if (!quantityText.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = quantityText,
+                        style = if (compact) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
