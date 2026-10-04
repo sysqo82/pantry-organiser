@@ -85,4 +85,7 @@ object DashboardModule {
 
     @Provides
     fun providePastItemDao(database: PantryDatabase): PastItemDao = database.pastItemDao()
+
+    @Provides
+    fun provideCoroutineDispatcher(): kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 }

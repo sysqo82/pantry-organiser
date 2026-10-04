@@ -11,6 +11,7 @@ import io.ktor.http.content.*
 import io.ktor.serialization.kotlinx.json.*
 import app.cash.turbine.test
 import io.mockk.*
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -170,5 +171,58 @@ class PocketBaseSyncServiceTest {
             assert(subscriptionCaptured)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `observeBatches handles HTTP error status by backing off and throwing exception`() = runTest {
+        var callCount = 0
+        val mockEngine = MockEngine { _ ->
+            callCount++
+            respond(
+                content = "Error 502: Bad gateway",
+                status = HttpStatusCode.BadGateway,
+                headers = headersOf(HttpHeaders.ContentType, "text/html")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) { json() }
+            install(HttpTimeout)
+        }
+        val service = PocketBaseSyncService(client, baseUrl)
+
+        val job = launch {
+            service.observeBatches(pantryId).collect {}
+        }
+        testScheduler.advanceTimeBy(1000)
+        job.cancel()
+
+        // With backoff delay (5000ms), only 1 initial call occurs within 1000ms
+        assertEquals(1, callCount)
+    }
+
+    @Test
+    fun `observePantryItems handles HTTP error status by backing off`() = runTest {
+        var callCount = 0
+        val mockEngine = MockEngine { _ ->
+            callCount++
+            respond(
+                content = "Error 530: Cloudflare error",
+                status = HttpStatusCode(530, "Cloudflare Error"),
+                headers = headersOf(HttpHeaders.ContentType, "text/html")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) { json() }
+            install(HttpTimeout)
+        }
+        val service = PocketBaseSyncService(client, baseUrl)
+
+        val job = launch {
+            service.observePantryItems(pantryId).collect {}
+        }
+        testScheduler.advanceTimeBy(1000)
+        job.cancel()
+
+        assertEquals(1, callCount)
     }
 }
