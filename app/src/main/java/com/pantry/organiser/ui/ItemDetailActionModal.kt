@@ -31,6 +31,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.InventorySuggestionEngine
+import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.ui.components.ProductThumbnail
@@ -405,8 +406,8 @@ fun ShelfLocatorGrid(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Shelf numbering S4 down to S1
-        listOf(4, 3, 2, 1).forEach { shelf ->
+        // Shelf numbering S1 up to S5
+        listOf(1, 2, 3, 4, 5).forEach { shelf ->
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -454,13 +455,7 @@ fun ShelfLocatorGrid(
 }
 
 private fun getShelfName(shelf: Int): String {
-    return when(shelf) {
-        4 -> "Top Shelf 4"
-        3 -> "Middle Shelf 3"
-        2 -> "Lower Shelf 2"
-        1 -> "Bottom Shelf 1"
-        else -> "Shelf $shelf"
-    }
+    return PantryConstants.getShelfName(shelf)
 }
 
 private fun getZoneLabel(index: Int): String {

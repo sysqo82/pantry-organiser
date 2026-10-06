@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.testTag
+import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 
 @Composable
@@ -37,17 +38,19 @@ fun PantryShelfGrid(
             .padding(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        repeat(4) { row ->
+        repeat(PantryConstants.TOTAL_SHELVES) { row ->
             Row(
                 modifier = Modifier.fillMaxWidth().weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                repeat(3) { col ->
+                repeat(PantryConstants.ZONES_PER_SHELF) { col ->
                     val label = getCellLabel(row, col)
+                    val shelfNumber = PantryConstants.rowToShelf(row)
+                    val zoneIndex = PantryConstants.colToZone(col)
                     val isSelected = selectedCell?.first == row && selectedCell?.second == col
                     val isItemLocation = highlightedItem != null && 
-                                       highlightedItem.safeShelfNumber == (4 - row) && 
-                                       highlightedItem.safeZoneIndex == (col + 1)
+                                       highlightedItem.safeShelfNumber == shelfNumber && 
+                                       highlightedItem.safeZoneIndex == zoneIndex
                     
                     ShelfCell(
                         label = label,
@@ -140,11 +143,7 @@ fun ShelfCell(
 }
 
 fun getCellLabel(row: Int, col: Int): String {
-    val shelf = (4 - row).coerceIn(1, 4)
-    val zone = when (col.coerceIn(0, 2)) {
-        0 -> "L"
-        1 -> "M"
-        else -> "R"
-    }
+    val shelf = PantryConstants.rowToShelf(row)
+    val zone = PantryConstants.getZoneLabel(PantryConstants.colToZone(col))
     return "S$shelf-$zone"
 }

@@ -7,14 +7,14 @@ class PantryConstantsTest {
 
     @Test
     fun `shelfToRow maps correctly`() {
-        assertEquals(0, PantryConstants.shelfToRow(4))
-        assertEquals(3, PantryConstants.shelfToRow(1))
+        assertEquals(0, PantryConstants.shelfToRow(1))
+        assertEquals(4, PantryConstants.shelfToRow(5))
     }
 
     @Test
     fun `rowToShelf maps correctly`() {
-        assertEquals(4, PantryConstants.rowToShelf(0))
-        assertEquals(1, PantryConstants.rowToShelf(3))
+        assertEquals(1, PantryConstants.rowToShelf(0))
+        assertEquals(5, PantryConstants.rowToShelf(4))
     }
 
     @Test

@@ -1,16 +1,19 @@
 package com.pantry.organiser.dashboard.data
 
+import android.content.Context
 import android.util.Log
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.toPastItem
 import com.pantry.organiser.core.network.SyncService
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +22,8 @@ import javax.inject.Singleton
 class PantryRepository @Inject constructor(
     private val pantryDao: PantryDao,
     private val pastItemDao: PastItemDao,
-    private val syncService: SyncService
+    private val syncService: SyncService,
+    @ApplicationContext private val context: Context
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val allItems: Flow<List<PantryItem>> = pantryDao.getAllItems()
@@ -29,7 +33,26 @@ class PantryRepository @Inject constructor(
     init {
         scope.launch {
             try {
-                val remoteItems = syncService.fetchPantryItems()
+                val rawRemoteItems = syncService.fetchPantryItems()
+                val flagFile = File(context.filesDir, "pantry_pb_shelves_migrated_v2.flag")
+                val needsMigration = !flagFile.exists()
+
+                val remoteItems = rawRemoteItems.map { item ->
+                    var migrated = item
+                    if (needsMigration && migrated.shelfNumber in 1..4) {
+                        val newShelf = 5 - migrated.shelfNumber
+                        Log.i("PantryRepo", "Migrating remote dashboard item shelf for ${migrated.name}: ${migrated.shelfNumber} -> $newShelf")
+                        migrated = migrated.copy(shelfNumber = newShelf)
+                        scope.launch {
+                            syncService.updatePantryItem(migrated)
+                        }
+                    }
+                    migrated
+                }
+                if (needsMigration) {
+                    try { flagFile.createNewFile() } catch (_: Exception) {}
+                }
+
                 val remoteIds = remoteItems.map { it.id }.toSet()
 
                 val localItems = pantryDao.getAllItemsOnce()

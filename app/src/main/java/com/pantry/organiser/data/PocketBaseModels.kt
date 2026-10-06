@@ -75,7 +75,7 @@ private fun parsePocketBaseDate(dateStr: String?): Long {
 }
 
 fun PantryItem.toPocketBase(): PocketBasePantryItem {
-    val pbShelf = shelfNumber.coerceIn(1, 4)
+    val pbShelf = shelfNumber.coerceIn(1, 5)
     val pbZone = zoneIndex.coerceIn(1, 3)
     
     // We trust the local trackingType. Classification logic moved to ViewModel.
@@ -118,7 +118,7 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
     // The "image_url" field in PB holds the original OFF link
     val originalApiUrl = imageUrl?.ifBlank { null }?.takeIf { it != "N/A" }
 
-    val mappedShelf = shelfNumber.coerceIn(1, 4)
+    val mappedShelf = shelfNumber.coerceIn(1, 5)
     val mappedZone = zoneIndex.coerceIn(1, 3)
     
     val mappedTrackingType = trackingType?.takeIf { it.isNotBlank() }?.let {

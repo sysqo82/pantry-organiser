@@ -143,7 +143,7 @@ fun DashboardLayout(
             pantryItems
                 .filter { it.isAssigned && it.hasStock }
                 .sortedWith(
-                    compareByDescending<PantryItem> { it.shelfNumber }
+                    compareBy<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }
                         .thenBy { it.name }
                 )

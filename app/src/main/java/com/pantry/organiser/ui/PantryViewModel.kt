@@ -48,7 +48,11 @@ class PantryViewModel(
     init {
         viewModelScope.launch {
             repository.allItems.collect { items ->
-                val saneItems = performDataSanityCheck(items)
+                val saneItems = performDataSanityCheck(items).sortedWith(
+                    compareBy<PantryItem> { it.shelfNumber }
+                        .thenBy { it.zoneIndex }
+                        .thenBy { it.name }
+                )
                 _uiState.update { 
                     it.copy(
                         items = saneItems,
@@ -193,7 +197,7 @@ class PantryViewModel(
             val isAlreadyHighlighted = it.highlightedItemId == item.id
             // Map 1-indexed shelf/zone to 0-indexed row/col with strict clamping
             // Shelf 1 (S1) -> Row 3. Formula: (4 - shelfNumber)
-            val shelfRow = (4 - item.shelfNumber).coerceIn(0, 3)
+            val shelfRow = PantryConstants.shelfToRow(item.shelfNumber)
             val shelfCol = (item.zoneIndex - 1).coerceIn(0, 2)
             val newShelf = if (isAlreadyHighlighted) null else shelfRow to shelfCol
             it.copy(
@@ -623,7 +627,7 @@ class PantryViewModel(
         if (_uiState.value.isReadOnly) {
             // Read-Only mode just highlights the item (Identity Lookup)
             selectItem(item)
-            val label = getCellLabel((4 - item.shelfNumber).coerceIn(0, 3), (item.zoneIndex - 1).coerceIn(0, 2))
+            val label = getCellLabel(PantryConstants.shelfToRow(item.shelfNumber), (item.zoneIndex - 1).coerceIn(0, 2))
             _uiState.update { it.copy(userNotification = "Found: ${item.name} at $label", recognizedItem = item) }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
@@ -672,7 +676,7 @@ class PantryViewModel(
         val pending = _uiState.value.pendingNewItem ?: return
         viewModelScope.launch {
             // Map Row 3 (Bottom) to Shelf 1. Standard mapping: (4 - row)
-            val shelfNumber = (4 - row).coerceIn(1, 4)
+            val shelfNumber = PantryConstants.rowToShelf(row)
             val zoneIndex = (col + 1).coerceIn(1, 3)
             val newItem = pending.copy(shelfNumber = shelfNumber, zoneIndex = zoneIndex)
             android.util.Log.d("PantryVM", "Assigning shelf: row=$row -> shelf=$shelfNumber")
@@ -757,7 +761,7 @@ class PantryViewModel(
         
         viewModelScope.launch {
             // Map UI row/col to 1-indexed shelf/zone with strict clamping
-            val shelfNumber = (4 - row).coerceIn(1, 4)
+            val shelfNumber = PantryConstants.rowToShelf(row)
             val zoneIndex = (col + 1).coerceIn(1, 3)
 
             val existingItem = _uiState.value.items.find { 
@@ -788,7 +792,7 @@ class PantryViewModel(
                     name = name,
                     brand = brand,
                     packageQuantity = packageQuantity,
-                    shelfNumber = shelfNumber.coerceIn(1, 4),
+                    shelfNumber = shelfNumber.coerceIn(1, 5),
                     zoneIndex = zoneIndex.coerceIn(1, 3),
                     imageUrl = if (isOffUrl) null else imageUrl,
                     apiImageUrl = if (isOffUrl) imageUrl else null,
@@ -813,9 +817,9 @@ class PantryViewModel(
     private fun filterItems(items: List<PantryItem>, selection: Pair<Int, Int>?): List<PantryItem> {
         return if (selection == null) items else {
             // Standard mapping: Row 0 -> Shelf 4, Row 3 -> Shelf 1
-            val targetShelf = (4 - selection.first).coerceIn(1, 4)
+            val targetShelf = PantryConstants.rowToShelf(selection.first)
             val targetZone = (selection.second + 1).coerceIn(1, 3)
-            items.filter { it.shelfNumber.coerceIn(1, 4) == targetShelf && it.zoneIndex.coerceIn(1, 3) == targetZone }
+            items.filter { it.shelfNumber.coerceIn(1, 5) == targetShelf && it.zoneIndex.coerceIn(1, 3) == targetZone }
         }
     }
 }

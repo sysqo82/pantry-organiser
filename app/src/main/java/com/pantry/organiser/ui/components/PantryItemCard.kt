@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 
@@ -103,7 +104,7 @@ fun PantryItemCard(
                         shape = MaterialTheme.shapes.small
                     ) {
                         Text(
-                            text = getCellLabel(4 - item.safeShelfNumber, item.safeZoneIndex - 1),
+                            text = "S${item.safeShelfNumber}-${PantryConstants.getZoneLabel(item.safeZoneIndex)}",
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelSmall
                         )

@@ -10,7 +10,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [PantryItem::class], version = 7, exportSchema = false)
+@Database(entities = [PantryItem::class], version = 8, exportSchema = false)
 @TypeConverters(PantryTypeConverters::class)
 abstract class PantryDatabase : RoomDatabase() {
     abstract fun pantryDao(): PantryDao
@@ -23,6 +23,12 @@ abstract class PantryDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE pantry_items SET shelf_number = 5 - shelf_number WHERE shelf_number BETWEEN 1 AND 4")
+            }
+        }
+
         fun getDatabase(context: Context): PantryDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -30,7 +36,7 @@ abstract class PantryDatabase : RoomDatabase() {
                     PantryDatabase::class.java,
                     "pantry_database.db"
                 )
-                .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_3_4, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

@@ -412,7 +412,7 @@ fun ShelfLocatorGrid(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        listOf(4, 3, 2, 1).forEach { shelf ->
+        listOf(1, 2, 3, 4, 5).forEach { shelf ->
             Row(
                 modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

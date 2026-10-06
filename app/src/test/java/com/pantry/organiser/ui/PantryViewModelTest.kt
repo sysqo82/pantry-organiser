@@ -83,8 +83,8 @@ class PantryViewModelTest {
     @Test
     fun `selectShelf filters items correctly`() = runTest {
         val items = listOf(
-            PantryItem(id = "1", name = "Shelf 1 Item", shelfNumber = 4, zoneIndex = 1), // S4-L (Row 0, Col 0)
-            PantryItem(id = "2", name = "Shelf 2 Item", shelfNumber = 3, zoneIndex = 1)  // S3-L (Row 1, Col 0)
+            PantryItem(id = "1", name = "Shelf 1 Item", shelfNumber = 1, zoneIndex = 1), // S1-L (Row 0, Col 0)
+            PantryItem(id = "2", name = "Shelf 2 Item", shelfNumber = 2, zoneIndex = 1)  // S2-L (Row 1, Col 0)
         )
         every { repository.allItems } returns flowOf(items)
         

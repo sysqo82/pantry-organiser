@@ -4,20 +4,20 @@ import com.pantry.organiser.core.BuildConfig
 
 object PantryConstants {
     val POCKETBASE_URL = BuildConfig.POCKETBASE_URL
-    const val TOTAL_SHELVES = 4
+    const val TOTAL_SHELVES = 5
     const val ZONES_PER_SHELF = 3
 
     /**
-     * Maps a 1-indexed shelf number (1 to 4) to a 0-indexed UI row (0 to 3).
-     * Shelf 4 (Top) -> Row 0
-     * Shelf 1 (Bottom) -> Row 3
+     * Maps a 1-indexed shelf number (1 to 5) to a 0-indexed UI row (0 to 4).
+     * Shelf 1 (Top) -> Row 0
+     * Shelf 5 (Bottom) -> Row 4
      */
-    fun shelfToRow(shelfNumber: Int): Int = (TOTAL_SHELVES - shelfNumber).coerceIn(0, TOTAL_SHELVES - 1)
+    fun shelfToRow(shelfNumber: Int): Int = (shelfNumber - 1).coerceIn(0, TOTAL_SHELVES - 1)
 
     /**
-     * Maps a 0-indexed UI row (0 to 3) to a 1-indexed shelf number (1 to 4).
+     * Maps a 0-indexed UI row (0 to 4) to a 1-indexed shelf number (1 to 5).
      */
-    fun rowToShelf(row: Int): Int = (TOTAL_SHELVES - row).coerceIn(1, TOTAL_SHELVES)
+    fun rowToShelf(row: Int): Int = (row + 1).coerceIn(1, TOTAL_SHELVES)
 
     /**
      * Maps a 1-indexed zone index (1 to 3) to a 0-indexed UI column (0 to 2).
@@ -30,10 +30,11 @@ object PantryConstants {
     fun colToZone(col: Int): Int = (col + 1).coerceIn(1, ZONES_PER_SHELF)
     
     fun getShelfName(shelfNumber: Int): String = when (shelfNumber) {
-        4 -> "Top Shelf 4"
-        3 -> "Middle Shelf 3"
-        2 -> "Lower Shelf 2"
-        1 -> "Bottom Shelf 1"
+        1 -> "Top Shelf 1"
+        2 -> "Shelf 2"
+        3 -> "Shelf 3"
+        4 -> "Shelf 4"
+        5 -> "Bottom Shelf 5"
         else -> "Shelf $shelfNumber"
     }
     

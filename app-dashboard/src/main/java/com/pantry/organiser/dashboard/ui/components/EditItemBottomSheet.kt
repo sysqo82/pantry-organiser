@@ -47,7 +47,7 @@ fun EditItemBottomSheet(
     var sealedCount by remember(item.id) { mutableStateOf(item.sealedCount.toString()) }
     var activeFill by remember(item.id) { mutableStateOf(item.activeFill) }
 
-    var selectedRow by remember(item.id) { mutableIntStateOf((4 - item.shelfNumber.coerceIn(1, 4)).coerceIn(0, 3)) }
+    var selectedRow by remember(item.id) { mutableIntStateOf(PantryConstants.shelfToRow(item.shelfNumber)) }
     var selectedCol by remember(item.id) { mutableIntStateOf((item.zoneIndex.coerceIn(1, 3) - 1).coerceIn(0, 2)) }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -248,7 +248,7 @@ fun EditItemBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Location: Shelf ${4 - selectedRow}, Zone ${PantryConstants.getZoneLabel(selectedCol + 1)}",
+                    text = "Location: Shelf ${PantryConstants.rowToShelf(selectedRow)}, Zone ${PantryConstants.getZoneLabel(selectedCol + 1)}",
                     style = MaterialTheme.typography.titleMedium
                 )
 
@@ -287,7 +287,7 @@ fun EditItemBottomSheet(
                         onClick = {
                             val parsedUnits = unitsPerPack.toIntOrNull() ?: 1
                             val parsedSealed = sealedCount.toIntOrNull() ?: 0
-                            val targetShelf = 4 - selectedRow
+                            val targetShelf = PantryConstants.rowToShelf(selectedRow)
                             val targetZone = selectedCol + 1
 
                             val updatedItem = item.copy(

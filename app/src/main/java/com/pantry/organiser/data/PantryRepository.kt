@@ -37,8 +37,8 @@ class PantryRepository @JvmOverloads constructor(
                 }
 
                 // 2. Shelf Number Fix (0 -> 1 or out of bounds)
-                if (item.shelfNumber !in 1..4) {
-                    val fixedShelf = item.shelfNumber.coerceIn(1, 4)
+                if (item.shelfNumber !in 1..5) {
+                    val fixedShelf = item.shelfNumber.coerceIn(1, 5)
                     android.util.Log.i("PantryRepository", "Fixing shelf number for item ${item.id}: ${item.shelfNumber} -> $fixedShelf")
                     updatedItem = updatedItem.copy(shelfNumber = fixedShelf)
                     needsUpdate = true
@@ -83,7 +83,25 @@ class PantryRepository @JvmOverloads constructor(
         scope.launch {
             val remotePocketItems = pocketBaseApi.getItems()
             if (remotePocketItems != null) {
-                val remoteItems = remotePocketItems.map { it.toLocal() }
+                val flagFile = filesDir?.let { File(it, "pantry_pb_shelves_migrated_v2.flag") }
+                val needsMigration = flagFile != null && !flagFile.exists()
+
+                val remoteItems = remotePocketItems.map { pbItem ->
+                    var localItem = pbItem.toLocal()
+                    if (needsMigration && localItem.shelfNumber in 1..4) {
+                        val migratedShelf = 5 - localItem.shelfNumber
+                        android.util.Log.i("PantryRepository", "Migrating remote PB shelf for ${localItem.name}: ${localItem.shelfNumber} -> $migratedShelf")
+                        localItem = localItem.copy(shelfNumber = migratedShelf)
+                        scope.launch {
+                            pocketBaseApi.updateItem(localItem.id, localItem.toPocketBase())
+                        }
+                    }
+                    localItem
+                }
+                if (needsMigration) {
+                    try { flagFile?.createNewFile() } catch (_: Exception) {}
+                }
+
                 val remoteIds = remoteItems.map { it.id }.toSet()
                 
                 // Get all local items to identify and remove "ghost" items
@@ -111,7 +129,7 @@ class PantryRepository @JvmOverloads constructor(
         
         // Optimistic local update with range safety
         val safeItem = itemWithId.copy(
-            shelfNumber = itemWithId.shelfNumber.coerceIn(1, 4),
+            shelfNumber = itemWithId.shelfNumber.coerceIn(1, 5),
             zoneIndex = itemWithId.zoneIndex.coerceIn(1, 3)
         )
         
@@ -139,7 +157,7 @@ class PantryRepository @JvmOverloads constructor(
 
     suspend fun updateItem(item: PantryItem) {
         val safeItem = item.copy(
-            shelfNumber = item.shelfNumber.coerceIn(1, 4),
+            shelfNumber = item.shelfNumber.coerceIn(1, 5),
             zoneIndex = item.zoneIndex.coerceIn(1, 3)
         )
         android.util.Log.d("PantryRepository", "Updating DB item ${safeItem.id}: shelf=${safeItem.shelfNumber}")
