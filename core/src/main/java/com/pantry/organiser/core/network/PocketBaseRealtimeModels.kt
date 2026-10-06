@@ -63,7 +63,7 @@ data class PocketBasePantryItem(
 )
 
 fun PantryItem.toPocketBase(): PocketBasePantryItem {
-    val pbShelf = shelfNumber.coerceIn(1, 4)
+    val pbShelf = shelfNumber.coerceIn(1, 5)
     val pbZone = zoneIndex.coerceIn(1, 3)
 
     // OFF Image URL goes to image_url and api_image_url (NEVER PocketBase file URLs)
@@ -103,7 +103,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
 fun PocketBasePantryItem.toLocal(): PantryItem {
     val rawShelf = shelfNumber
     val rawZone = zoneIndex
-    val mappedShelf = rawShelf.coerceIn(1, 4)
+    val mappedShelf = rawShelf.coerceIn(1, 5)
     val mappedZone = rawZone.coerceIn(1, 3)
 
     val inferredUnits = unitsPerPack ?: PantryItem.inferUnitsPerPack(name, packageQuantity)

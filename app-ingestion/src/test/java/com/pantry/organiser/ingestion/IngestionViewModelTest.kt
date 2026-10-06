@@ -238,7 +238,8 @@ class IngestionViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(2, viewModel.uiState.value.items.size)
-        assertEquals("Soy Sauce", viewModel.uiState.value.items[1].name)
+        assertEquals("Soy Sauce", viewModel.uiState.value.items[0].name)
+        assertEquals("Sweetcorn", viewModel.uiState.value.items[1].name)
 
         // Emit deleted item event (sealedCount = -1)
         val deletedItem = PantryItem(id = "1", name = "Sweetcorn", barcode = "100", shelfNumber = 4, zoneIndex = 2, isAssigned = true, sealedCount = -1)
@@ -275,7 +276,7 @@ class IngestionViewModelTest {
     }
 
     @Test
-    fun `startRealtimeSync orders items by shelf descending, zone ascending, and name ascending`() = runTest {
+    fun `startRealtimeSync orders items by shelf ascending, zone ascending, and name ascending`() = runTest {
         val unsortedItems = listOf(
             PantryItem(id = "1", name = "Zucchini", barcode = "100", shelfNumber = 1, zoneIndex = 1, isAssigned = true),
             PantryItem(id = "2", name = "Apples", barcode = "200", shelfNumber = 4, zoneIndex = 2, isAssigned = true),
@@ -291,6 +292,6 @@ class IngestionViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         val itemNames = viewModel.uiState.value.items.map { it.name }
-        assertEquals(listOf("Bananas", "Apples", "Avocado", "Zucchini"), itemNames)
+        assertEquals(listOf("Zucchini", "Bananas", "Apples", "Avocado"), itemNames)
     }
 }

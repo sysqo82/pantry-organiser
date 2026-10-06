@@ -72,7 +72,7 @@ data class PantryItem(
             ?: imageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
             ?: apiImageUrl?.takeIf { it.isNotBlank() && it != "N/A" }
 
-    val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 4)
+    val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 5)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
 
     val totalDisplayCount: Int get() = when (trackingType) {

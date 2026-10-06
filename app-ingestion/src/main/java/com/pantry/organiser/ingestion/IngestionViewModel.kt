@@ -340,7 +340,7 @@ class IngestionViewModel @Inject constructor(
 
     private fun List<PantryItem>.sortPantryItems(): List<PantryItem> {
         return this.sortedWith(
-            compareByDescending<PantryItem> { it.shelfNumber }
+            compareBy<PantryItem> { it.shelfNumber }
                 .thenBy { it.zoneIndex }
                 .thenBy { it.name.lowercase() }
         )

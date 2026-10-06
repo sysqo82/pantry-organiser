@@ -422,7 +422,7 @@ fun IngestionScreen(
                                             selectedCell = null
                                             selectedShelfFilter = null
                                         } else {
-                                            val cellRow = 4 - item.shelfNumber
+                                            val cellRow = PantryConstants.shelfToRow(item.shelfNumber)
                                             val cellCol = item.zoneIndex - 1
                                             selectedItem = item
                                             selectedCell = Pair(cellRow, cellCol)

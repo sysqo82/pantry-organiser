@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
 
@@ -45,7 +46,7 @@ fun EditItemBottomSheet(
     var activeFill by remember(item.id) { mutableStateOf(item.activeFill) }
     
     // Map 1..4 shelf number to 0..3 UI row with clamping
-    var selectedRow by remember(item.id) { mutableIntStateOf((4 - item.shelfNumber.coerceIn(1, 4)).coerceIn(0, 3)) }
+    var selectedRow by remember(item.id) { mutableIntStateOf(PantryConstants.shelfToRow(item.shelfNumber)) }
     var selectedCol by remember(item.id) { mutableIntStateOf((item.zoneIndex.coerceIn(1, 3) - 1).coerceIn(0, 2)) }
     
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -247,7 +248,7 @@ fun EditItemBottomSheet(
                         selectedCell = selectedRow to selectedCol,
                         onCellClick = { r, c -> if (!isReadOnly) { selectedRow = r; selectedCol = c } },
                         highlightedItem = item.copy(
-                            shelfNumber = (4 - selectedRow).coerceIn(1, 4),
+                            shelfNumber = PantryConstants.rowToShelf(selectedRow),
                             zoneIndex = (selectedCol + 1).coerceIn(1, 3)
                         ),
                         modifier = Modifier.fillMaxSize()
@@ -259,7 +260,7 @@ fun EditItemBottomSheet(
 
                     Button(
                         onClick = {
-                            val mappedShelf = (4 - selectedRow).coerceIn(1, 4)
+                            val mappedShelf = PantryConstants.rowToShelf(selectedRow)
                             val mappedZone = (selectedCol + 1).coerceIn(1, 3)
                             
                             onSave(item.copy(

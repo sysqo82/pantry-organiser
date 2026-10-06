@@ -490,11 +490,11 @@ class DashboardViewModelTest {
         val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
         val stateItems = vm.uiState.value.pantryItems
 
-        // Expected spatial order: S4-M (shelf 4, zone 2), S4-R (shelf 4, zone 3), S1-L (shelf 1, zone 1)
+        // Expected spatial order: S1-L (shelf 1, zone 1), S4-M (shelf 4, zone 2), S4-R (shelf 4, zone 3)
         assertEquals(3, stateItems.size)
-        assertEquals("Pizza Topper", stateItems[0].name)
-        assertEquals("Soy Sauce", stateItems[1].name)
-        assertEquals("Salt", stateItems[2].name)
+        assertEquals("Salt", stateItems[0].name)
+        assertEquals("Pizza Topper", stateItems[1].name)
+        assertEquals("Soy Sauce", stateItems[2].name)
     }
 
     @Test
@@ -627,8 +627,8 @@ class DashboardViewModelTest {
             barcode = "5012345678901",
             brand = "Kikkoman",
             packageQuantity = "250ml",
-            shelfNumber = 4,
-            zoneIndex = 2, // Shelf 4, Zone 2 -> Row 0, Col 1 (S4-M)
+            shelfNumber = 1,
+            zoneIndex = 2, // Shelf 1, Zone 2 -> Row 0, Col 1 (S1-M)
             trackingType = TrackingType.DISCRETE_COUNT,
             sealedCount = 1,
             isAssigned = true

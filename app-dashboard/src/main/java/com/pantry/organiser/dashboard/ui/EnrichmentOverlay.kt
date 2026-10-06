@@ -42,7 +42,7 @@ fun EnrichmentOverlay(
     var selectedFillLevel by remember { mutableStateOf(if (isPastItem) FillLevel.FULL else (existingItem?.activeFill ?: FillLevel.FULL)) }
 
     val defaultRow = suggestedShelf?.first
-        ?: existingItem?.shelfNumber?.let { 4 - it }
+        ?: existingItem?.shelfNumber?.let { PantryConstants.shelfToRow(it) }
         ?: 0
     val defaultCol = suggestedShelf?.second
         ?: existingItem?.zoneIndex?.let { it - 1 }
@@ -193,7 +193,7 @@ fun EnrichmentOverlay(
                 // Full-Width Primary Action Button at the Bottom
                 Button(
                     onClick = {
-                        val shelf = 4 - selectedRow
+                        val shelf = PantryConstants.rowToShelf(selectedRow)
                         val zone = selectedCol + 1
                         onSave(shelf, zone, quantityToAdd, selectedFillLevel)
                     },
@@ -361,12 +361,12 @@ private fun LocationLabelText(
     row: Int,
     col: Int
 ) {
-    val shelfNum = 4 - row
+    val shelfNum = PantryConstants.rowToShelf(row)
     val zoneNum = col + 1
     val currentLabel = "Selected: S$shelfNum-${PantryConstants.getZoneLabel(zoneNum)}"
 
     val locationLabel = when {
-        isExisting && existingItem != null -> "Stored at S${existingItem.shelfNumber}-${existingItem.zoneIndex} • $currentLabel"
+        isExisting && existingItem != null -> "Stored at S${existingItem.shelfNumber}-${PantryConstants.getZoneLabel(existingItem.zoneIndex)} • $currentLabel"
         isPastItem && existingItem != null -> {
             val shelfName = PantryConstants.getShelfName(existingItem.shelfNumber)
             val zoneLabel = PantryConstants.getZoneLabel(existingItem.zoneIndex)

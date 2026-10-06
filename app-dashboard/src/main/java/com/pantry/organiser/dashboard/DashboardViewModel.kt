@@ -45,7 +45,7 @@ class DashboardViewModel @Inject constructor(
                 pantryRepository.allItems
             ) { pending, items ->
                 val sortedItems = items.sortedWith(
-                    compareByDescending<PantryItem> { it.shelfNumber }
+                    compareBy<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }
                         .thenBy { it.name }
                 )
@@ -97,7 +97,7 @@ class DashboardViewModel @Inject constructor(
 
                 if (pastItem != null) {
                     val pastAsPantry = pastItem.toPantryItem().copy(isAssigned = false, activeFill = FillLevel.FULL)
-                    val suggestedRow = 4 - pastItem.shelfNumber
+                    val suggestedRow = PantryConstants.shelfToRow(pastItem.shelfNumber)
                     val suggestedCol = pastItem.zoneIndex - 1
                     _uiState.update {
                         it.copy(
