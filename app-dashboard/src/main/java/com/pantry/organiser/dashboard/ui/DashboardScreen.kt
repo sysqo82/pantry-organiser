@@ -1,30 +1,25 @@
 package com.pantry.organiser.dashboard.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.dashboard.DashboardViewModel
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.ui.components.EditItemBottomSheet
 import com.pantry.organiser.dashboard.ui.components.ItemDetailActionModal
-import com.pantry.organiser.dashboard.ui.components.PantryItemCard
+import com.pantry.organiser.dashboard.ui.components.PrototypeSwitcher
+import com.pantry.organiser.dashboard.ui.variants.VariantACommandCenter
+import com.pantry.organiser.dashboard.ui.variants.VariantBSplitWorkbench
+import com.pantry.organiser.dashboard.ui.variants.VariantCZoneTacticalMap
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,7 +28,6 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val configuration = LocalConfiguration.current
-    val isTablet = configuration.screenWidthDp >= 600
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -61,8 +55,7 @@ fun DashboardScreen(
     }
 
     Scaffold(
-        topBar = {
-        },
+        topBar = { },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Box(
@@ -77,6 +70,7 @@ fun DashboardScreen(
                 onSelectItem = { viewModel.selectItem(it) },
                 onConsume = { item -> viewModel.consumeItem(item) },
                 onRestock = { item -> viewModel.restockItem(item) },
+                onUpdateFillLevel = { item, fillLevel -> viewModel.updateFillLevel(item, fillLevel) },
                 onClearPendingItem = { viewModel.clearPendingItem(it) },
                 onClearAllPending = { viewModel.clearAllPendingItems() }
             )
@@ -123,7 +117,6 @@ fun DashboardScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardLayout(
     pendingItems: List<SyncQueueItem>,
@@ -132,100 +125,51 @@ fun DashboardLayout(
     onSelectItem: (PantryItem) -> Unit,
     onConsume: (PantryItem) -> Unit,
     onRestock: (PantryItem) -> Unit,
+    onUpdateFillLevel: (PantryItem, FillLevel) -> Unit,
     onClearPendingItem: (SyncQueueItem) -> Unit = {},
     onClearAllPending: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Inventory, 1: Sync Queue
+    var currentVariant by remember { mutableStateOf("A") }
 
-    Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        val displayedItems = remember(pantryItems) {
-            pantryItems
-                .filter { it.isAssigned && it.hasStock }
-                .sortedWith(
-                    compareBy<PantryItem> { it.shelfNumber }
-                        .thenBy { it.zoneIndex }
-                        .thenBy { it.name }
-                )
+    Box(modifier = modifier.fillMaxSize()) {
+        when (currentVariant) {
+            "A" -> VariantACommandCenter(
+                pantryItems = pantryItems,
+                pendingItems = pendingItems,
+                onProcessItem = onProcessItem,
+                onSelectItem = onSelectItem,
+                onConsume = onConsume,
+                onRestock = onRestock,
+                onUpdateFillLevel = onUpdateFillLevel,
+                onClearAllPending = onClearAllPending
+            )
+            "B" -> VariantBSplitWorkbench(
+                pantryItems = pantryItems,
+                pendingItems = pendingItems,
+                onProcessItem = onProcessItem,
+                onSelectItem = onSelectItem,
+                onConsume = onConsume,
+                onRestock = onRestock,
+                onUpdateFillLevel = onUpdateFillLevel,
+                onClearAllPending = onClearAllPending
+            )
+            "C" -> VariantCZoneTacticalMap(
+                pantryItems = pantryItems,
+                pendingItems = pendingItems,
+                onProcessItem = onProcessItem,
+                onSelectItem = onSelectItem,
+                onConsume = onConsume,
+                onRestock = onRestock,
+                onUpdateFillLevel = onUpdateFillLevel,
+                onClearAllPending = onClearAllPending
+            )
         }
 
-        // Segmented Control Tabs
-        PrimaryTabRow(selectedTabIndex = selectedTab) {
-            Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }, text = { Text("Stock Inventory (${displayedItems.size})", fontWeight = FontWeight.Bold) })
-            Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }, text = { Text("From Shopping List (${pendingItems.size})", fontWeight = FontWeight.Bold) })
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        if (selectedTab == 0) {
-            if (displayedItems.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Pantry is empty", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 180.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
-                ) {
-                    items(displayedItems, key = { it.id }) { item ->
-                        PantryItemCard(
-                            item = item,
-                            onSelectItem = onSelectItem,
-                            onConsume = onConsume,
-                            onRestock = onRestock
-                        )
-                    }
-                }
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (pendingItems.isEmpty()) {
-                    item { Text("No pending scans", modifier = Modifier.padding(16.dp)) }
-                } else {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Pending Scans (${pendingItems.size})",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            OutlinedButton(
-                                onClick = onClearAllPending,
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Clear All")
-                            }
-                        }
-                    }
-                }
-                items(pendingItems, key = { it.id.ifBlank { "${it.barcode}_${it.scannedAt}" } }) { item ->
-                    ElevatedCard(onClick = { onProcessItem(item) }, modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(item.productName ?: "Scanning...", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                Text("Barcode: ${item.barcode}", style = MaterialTheme.typography.bodySmall)
-                            }
-                            IconButton(onClick = { onClearPendingItem(item) }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear mis-scan", tint = MaterialTheme.colorScheme.error)
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            Button(onClick = { onProcessItem(item) }) {
-                                Text("Assign Shelf")
-                            }
-                        }
-                    }
-                }
-                item { Spacer(Modifier.height(24.dp)) }
-            }
-        }
+        PrototypeSwitcher(
+            currentVariant = currentVariant,
+            onVariantChange = { currentVariant = it },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }

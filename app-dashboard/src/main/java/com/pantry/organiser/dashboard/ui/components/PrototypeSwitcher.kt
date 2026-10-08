@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -13,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,9 +22,9 @@ fun PrototypeSwitcher(
     onVariantChange: (String) -> Unit,
     modifier: Modifier = Modifier,
     variants: List<Pair<String, String>> = listOf(
-        "A" to "Variant A (Hero Full-Bleed Top Banner)",
-        "B" to "Variant B (Horizontal Media Split)",
-        "C" to "Variant C (Framed Fitted Canvas)"
+        "A" to "Variant A (Command Center)",
+        "B" to "Variant B (Split-Screen Workbench)",
+        "C" to "Variant C (Zone Tactical Map)"
     )
 ) {
     val currentIndex = variants.indexOfFirst { it.first == currentVariant }.coerceAtLeast(0)
@@ -35,7 +33,7 @@ fun PrototypeSwitcher(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp),
+            .padding(bottom = 8.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
@@ -72,7 +70,7 @@ fun PrototypeSwitcher(
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
                     Text(
-                        text = "PROTOTYPE UI VARIANT",
+                        text = "PROTOTYPE UX VARIANT",
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
