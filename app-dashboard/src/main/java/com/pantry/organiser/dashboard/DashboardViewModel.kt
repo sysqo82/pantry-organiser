@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
+import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.TrackingType
 import com.pantry.organiser.core.model.toPantryItem
 import com.pantry.organiser.dashboard.data.OpenFoodFactsProber
@@ -21,6 +22,7 @@ import javax.inject.Inject
 data class DashboardUiState(
     val pendingItems: List<SyncQueueItem> = emptyList(),
     val pantryItems: List<PantryItem> = emptyList(),
+    val pastItems: List<PastItem> = emptyList(),
     val activeOverlay: OverlayContext? = null,
     val pantryId: String = "default-pantry",
     val isSaving: Boolean = false,
@@ -42,14 +44,21 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             combine(
                 syncQueueRepository.getPendingItems(),
-                pantryRepository.allItems
-            ) { pending, items ->
+                pantryRepository.allItems,
+                pantryRepository.pastItems
+            ) { pending, items, past ->
                 val sortedItems = items.sortedWith(
                     compareBy<PantryItem> { it.shelfNumber }
                         .thenBy { it.zoneIndex }
                         .thenBy { it.name }
                 )
-                _uiState.update { it.copy(pendingItems = pending, pantryItems = sortedItems) }
+                _uiState.update {
+                    it.copy(
+                        pendingItems = pending,
+                        pantryItems = sortedItems,
+                        pastItems = past
+                    )
+                }
 
                 if (pending.isEmpty() && _uiState.value.activeOverlay is OverlayContext.SyncQueueEnrichment) {
                     _uiState.update { it.copy(activeOverlay = null) }
@@ -69,6 +78,12 @@ class DashboardViewModel @Inject constructor(
         pantryRepository.stopObservingRealtime()
     }
 
+    /**
+     * Process 1-Tap Intake:
+     * - For items already in the pantry or previously bought (past items), automatically assign to their former
+     *   location (shelf & zone) without showing the enrichment popup dialog.
+     * - For brand new unassigned items, open the Enrichment overlay dialog to pick location.
+     */
     fun processItem(item: SyncQueueItem) {
         viewModelScope.launch {
             val allItems = pantryRepository.allItems.firstOrNull() ?: emptyList()
@@ -81,14 +96,72 @@ class DashboardViewModel @Inject constructor(
                 ?: (if (item.itemId.isNotBlank()) allItems.find { it.id == item.itemId && it.isAssigned } else null)
 
             if (activeExistingItem != null) {
-                _uiState.update { 
+                // Known existing item: 1-Tap auto restock directly to its current location!
+                saveEnrichedItem(
+                    syncItem = item,
+                    existingItem = activeExistingItem,
+                    shelf = activeExistingItem.shelfNumber,
+                    zone = activeExistingItem.zoneIndex,
+                    quantityToAdd = 1,
+                    fillLevel = FillLevel.FULL,
+                    isPastItem = false
+                )
+            } else {
+                val pastItem = if (item.barcode.isNotBlank()) {
+                    pantryRepository.getPastItemByBarcode(item.barcode)
+                } else null
+
+                if (pastItem != null) {
+                    // Previously bought item: 1-Tap auto assign directly to its former location!
+                    val pastAsPantry = pastItem.toPantryItem().copy(isAssigned = false, activeFill = FillLevel.FULL)
+                    saveEnrichedItem(
+                        syncItem = item,
+                        existingItem = pastAsPantry,
+                        shelf = pastItem.shelfNumber,
+                        zone = pastItem.zoneIndex,
+                        quantityToAdd = 1,
+                        fillLevel = FillLevel.FULL,
+                        isPastItem = true
+                    )
+                } else {
+                    // New item: Open Enrichment Overlay so user can select location
+                    _uiState.update {
+                        it.copy(
+                            activeOverlay = OverlayContext.SyncQueueEnrichment(
+                                syncItem = item,
+                                existingItem = null,
+                                isPastItem = false
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Explicitly open the Enrichment Modal (e.g. if user taps card body to change location manually).
+     */
+    fun openEnrichmentModal(item: SyncQueueItem) {
+        viewModelScope.launch {
+            val allItems = pantryRepository.allItems.firstOrNull() ?: emptyList()
+            val assignedMatch = if (item.barcode.isNotBlank()) {
+                allItems.find { it.barcode == item.barcode && it.isAssigned }
+                    ?: pantryRepository.getItemByBarcode(item.barcode)?.takeIf { it.isAssigned }
+            } else null
+
+            val activeExistingItem = assignedMatch
+                ?: (if (item.itemId.isNotBlank()) allItems.find { it.id == item.itemId && it.isAssigned } else null)
+
+            if (activeExistingItem != null) {
+                _uiState.update {
                     it.copy(
                         activeOverlay = OverlayContext.SyncQueueEnrichment(
-                            syncItem = item, 
+                            syncItem = item,
                             existingItem = activeExistingItem,
                             isPastItem = false
                         )
-                    ) 
+                    )
                 }
             } else {
                 val pastItem = if (item.barcode.isNotBlank()) {
@@ -151,10 +224,10 @@ class DashboardViewModel @Inject constructor(
                 val updatedType = if (determinedType == TrackingType.DISCRETE_COUNT && inferredUnits > 1) TrackingType.DISCRETE_COUNT else existingItem.trackingType
                 val updatedUnits = if (inferredUnits > 1) inferredUnits else existingItem.unitsPerPack
 
-                val isGenericName = existingItem.name.isBlank() || 
-                                    existingItem.name == "Unnamed Item" || 
-                                    existingItem.name == "Unknown Product" || 
-                                    existingItem.name == "Network Error" || 
+                val isGenericName = existingItem.name.isBlank() ||
+                                    existingItem.name == "Unnamed Item" ||
+                                    existingItem.name == "Unknown Product" ||
+                                    existingItem.name == "Network Error" ||
                                     existingItem.name == "Enriching..."
 
                 val effectiveName = if (isGenericName && !syncItem.productName.isNullOrBlank()) {
@@ -215,8 +288,8 @@ class DashboardViewModel @Inject constructor(
                         ?: ("local_" + UUID.randomUUID().toString())
                 }
 
-                val effectiveName = existingItem?.name?.takeIf { 
-                    it.isNotBlank() && it != "Unknown Product" && it != "Unnamed Item" && it != "Network Error" && it != "Enriching..." 
+                val effectiveName = existingItem?.name?.takeIf {
+                    it.isNotBlank() && it != "Unknown Product" && it != "Unnamed Item" && it != "Network Error" && it != "Enriching..."
                 } ?: syncItem.productName ?: "Unknown Product"
 
                 val effectiveBrand = existingItem?.brand?.takeIf { it.isNotBlank() } ?: syncItem.brand
