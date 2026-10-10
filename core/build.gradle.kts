@@ -1,8 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
+}
+val customPocketBaseUrl = localProperties.getProperty("pocketbase.url")
 
 android {
     namespace = "com.pantry.organiser.core"
@@ -27,10 +36,12 @@ android {
 
     buildTypes {
         release {
-            buildConfigField("String", "POCKETBASE_URL", "\"https://pantry.lockpc.co.uk\"")
+            val url = customPocketBaseUrl ?: "https://pantry.lockpc.co.uk"
+            buildConfigField("String", "POCKETBASE_URL", "\"$url\"")
         }
         debug {
-            buildConfigField("String", "POCKETBASE_URL", "\"https://dev-pantry.lockpc.co.uk\"")
+            val url = customPocketBaseUrl ?: "https://dev-pantry.lockpc.co.uk"
+            buildConfigField("String", "POCKETBASE_URL", "\"$url\"")
         }
     }
 }

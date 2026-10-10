@@ -27,6 +27,7 @@ class PantryRepository @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     val allItems: Flow<List<PantryItem>> = pantryDao.getAllItems()
+    val pastItems: Flow<List<PastItem>> = pastItemDao.getAllPastItems()
 
     private var observeJob: Job? = null
 

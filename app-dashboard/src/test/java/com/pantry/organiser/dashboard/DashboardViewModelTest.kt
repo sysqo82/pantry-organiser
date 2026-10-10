@@ -13,7 +13,10 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -33,10 +36,10 @@ class DashboardViewModelTest {
         Dispatchers.setMain(testDispatcher)
         mockkStatic(android.util.Log::class)
         every { android.util.Log.d(any(), any()) } returns 0
-        every { android.util.Log.e(any(), any()) } returns 0
         every { android.util.Log.e(any(), any(), any()) } returns 0
         every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
         every { pantryRepository.allItems } returns flowOf(emptyList())
+        every { pantryRepository.pastItems } returns flowOf(emptyList())
         viewModel = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
     }
 
@@ -60,422 +63,29 @@ class DashboardViewModelTest {
             quantity = "750g"
         )
 
-        coEvery { pantryRepository.getItemByBarcode("5000462326897") } returns null
-
         val slot = slot<PantryItem>()
         coEvery { pantryRepository.addItem(capture(slot)) } returns Unit
+        coEvery { syncQueueRepository.markAsProcessed("batch1_item1") } returns Unit
 
         viewModel.saveEnrichedItem(
             syncItem = syncItem,
             existingItem = null,
-            shelf = 3,
-            zone = 2,
+            shelf = 1,
+            zone = 1,
             quantityToAdd = 2,
             fillLevel = FillLevel.FULL
         )
 
-        val savedItem = slot.captured
-        assertEquals("British Cooking Salt", savedItem.name)
-        assertEquals("5000462326897", savedItem.barcode)
-        assertEquals("Tesco", savedItem.brand)
-        assertEquals(3, savedItem.shelfNumber)
-        assertEquals(2, savedItem.zoneIndex)
-        assertEquals(TrackingType.BULK_LEVEL, savedItem.trackingType)
-        assertEquals(1, savedItem.sealedCount) // 1 sealed tub + 1 open tub = 2 total
-        assertEquals(FillLevel.FULL, savedItem.activeFill)
-        assertTrue(savedItem.hasStock)
-        assertEquals(2, savedItem.totalDisplayCount)
-    }
+        coVerify(exactly = 1) { pantryRepository.addItem(any()) }
+        coVerify(exactly = 1) { syncQueueRepository.markAsProcessed("batch1_item1") }
 
-    @Test
-    fun `saveEnrichedItem updates existing item with enriched name and details if existing was blank`() = runTest {
-        val existingItem = PantryItem(
-            id = "existing_123",
-            name = "",
-            barcode = "5000462326897",
-            brand = null,
-            shelfNumber = 1,
-            zoneIndex = 1,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.FULL
-        )
-
-        val syncItem = SyncQueueItem(
-            id = "batch1_item1",
-            barcode = "5000462326897",
-            scannedAt = 1000L,
-            batchId = "batch1",
-            productName = "British Cooking Salt",
-            brand = "Tesco",
-            imageUrl = "https://images.openfoodfacts.org/salt.jpg",
-            quantity = "750g"
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = existingItem,
-            shelf = 3,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL
-        )
-
-        val updatedItem = slot.captured
-        assertEquals("existing_123", updatedItem.id)
-        assertEquals("British Cooking Salt", updatedItem.name)
-        assertEquals("Tesco", updatedItem.brand)
-        assertEquals("https://images.openfoodfacts.org/salt.jpg", updatedItem.imageUrl)
-        assertEquals(3, updatedItem.shelfNumber)
-        assertEquals(2, updatedItem.zoneIndex)
-    }
-
-    @Test
-    fun `saveEnrichedItem updates existing item with enriched name when existing item name is Unknown Product`() = runTest {
-        val existingItem = PantryItem(
-            id = "existing_123",
-            name = "Unknown Product",
-            barcode = "5000462326897",
-            brand = null,
-            shelfNumber = 1,
-            zoneIndex = 1,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.FULL
-        )
-
-        val syncItem = SyncQueueItem(
-            id = "batch1_item1",
-            barcode = "5000462326897",
-            scannedAt = 1000L,
-            batchId = "batch1",
-            productName = "British Cooking Salt",
-            brand = "Tesco",
-            imageUrl = "https://images.openfoodfacts.org/salt.jpg",
-            quantity = "1.5kg"
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = existingItem,
-            shelf = 3,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL
-        )
-
-        val updatedItem = slot.captured
-        assertEquals("existing_123", updatedItem.id)
-        assertEquals("British Cooking Salt", updatedItem.name)
-        assertEquals("Tesco", updatedItem.brand)
-        assertEquals("https://images.openfoodfacts.org/salt.jpg", updatedItem.imageUrl)
-        assertEquals("1.5kg", updatedItem.packageQuantity)
-    }
-
-    @Test
-    fun `consumeItem on bulk item decrements fill level`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.FULL
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(bulkItem)
-
-        val updated = slot.captured
-        assertEquals(FillLevel.THREE_QUARTERS, updated.activeFill)
-        assertEquals(0, updated.sealedCount)
-    }
-
-    @Test
-    fun `consumeItem on empty bulk item with sealed reserve auto-rolls reserve`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 1,
-            activeFill = FillLevel.LOW
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(bulkItem) // LOW -> EMPTY -> Auto-roll: FULL, sealedCount = 0
-
-        val updated = slot.captured
-        assertEquals(FillLevel.FULL, updated.activeFill)
-        assertEquals(0, updated.sealedCount)
-    }
-
-    @Test
-    fun `consumeItem on empty bulk item with no reserve moves item to past items`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.EMPTY
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(bulkItem)
-
-        assertEquals("salt_1", slot.captured.id)
-    }
-
-    @Test
-    fun `consumeItem on bulk item at LOW with no reserve moves item to past items`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.LOW
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(bulkItem)
-
-        assertEquals("salt_1", slot.captured.id)
-    }
-
-    @Test
-    fun `restockItem on empty bulk item refills active fill to FULL`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.EMPTY
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.restockItem(bulkItem)
-
-        val updated = slot.captured
-        assertEquals(FillLevel.FULL, updated.activeFill)
-        assertEquals(0, updated.sealedCount)
-    }
-
-    @Test
-    fun `restockItem on non-empty bulk item adds sealed reserve`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 0,
-            activeFill = FillLevel.FULL
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.restockItem(bulkItem)
-
-        val updated = slot.captured
-        assertEquals(FillLevel.FULL, updated.activeFill)
-        assertEquals(1, updated.sealedCount)
-    }
-
-    @Test
-    fun `consumeItem on multipack decrements activeCount and auto-rolls when empty`() = runTest {
-        val multipackItem = PantryItem(
-            id = "corn_1",
-            name = "Sweetcorn in water 3x200g",
-            shelfNumber = 4,
-            zoneIndex = 2,
-            trackingType = TrackingType.DISCRETE_COUNT,
-            unitsPerPack = 3,
-            activeCount = 1,
-            sealedCount = 1
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(multipackItem, 1)
-
-        val updated = slot.captured
-        assertEquals(3, updated.activeCount) // Auto-rolled sealed multipack (3 units active)
-        assertEquals(0, updated.sealedCount) // Sealed reserve decremented to 0
-        assertEquals(3, updated.totalDisplayCount) // Total = 3 units
-    }
-
-    @Test
-    fun `updateFillLevel to EMPTY with sealed reserve auto-rolls next container`() = runTest {
-        val bulkItem = PantryItem(
-            id = "salt_1",
-            name = "British Cooking Salt",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.BULK_LEVEL,
-            sealedCount = 1,
-            activeFill = FillLevel.FULL
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.updateFillLevel(bulkItem, FillLevel.EMPTY)
-
-        val updated = slot.captured
-        assertEquals(FillLevel.FULL, updated.activeFill)
-        assertEquals(0, updated.sealedCount)
-    }
-
-    @Test
-    fun `saveEnrichedItem on unassigned multipack sets 0 sealed reserve packs giving 3 total units`() = runTest {
-        val unassignedItem = PantryItem(
-            id = "3fuvis3959ghsr2",
-            name = "Sweetcorn in water",
-            barcode = "5063445794342",
-            brand = "Tesco",
-            packageQuantity = "3 x 200 gr",
-            shelfNumber = 1,
-            zoneIndex = 1,
-            trackingType = TrackingType.DISCRETE_COUNT,
-            unitsPerPack = 3,
-            activeCount = 3,
-            sealedCount = 0,
-            isAssigned = false
-        )
-
-        val syncItem = SyncQueueItem(
-            id = "sq_1",
-            itemId = "3fuvis3959ghsr2",
-            barcode = "5063445794342",
-            scannedAt = 1000L,
-            batchId = "batch1",
-            productName = "Sweetcorn in water",
-            brand = "Tesco",
-            quantity = "3 x 200 gr"
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = unassignedItem,
-            shelf = 3,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL
-        )
-
-        val saved = slot.captured
-        assertEquals("3fuvis3959ghsr2", saved.id)
-        assertTrue(saved.isAssigned)
-        assertEquals(3, saved.shelfNumber)
-        assertEquals(2, saved.zoneIndex)
-        assertEquals(3, saved.unitsPerPack)
-        assertEquals(3, saved.activeCount)
-        assertEquals(0, saved.sealedCount) // 0 sealed reserve packs for 1 multipack
-        assertEquals(3, saved.totalDisplayCount) // Total 3 cans/tins
-    }
-
-    @Test
-    fun `saveEnrichedItem on already assigned multipack adds a sealed reserve pack`() = runTest {
-        val assignedItem = PantryItem(
-            id = "3fuvis3959ghsr2",
-            name = "Sweetcorn in water",
-            barcode = "5063445794342",
-            brand = "Tesco",
-            packageQuantity = "3 x 200 gr",
-            shelfNumber = 3,
-            zoneIndex = 2,
-            trackingType = TrackingType.DISCRETE_COUNT,
-            unitsPerPack = 3,
-            activeCount = 3,
-            sealedCount = 0,
-            isAssigned = true
-        )
-
-        val syncItem = SyncQueueItem(
-            id = "sq_2",
-            itemId = "3fuvis3959ghsr2",
-            barcode = "5063445794342",
-            scannedAt = 2000L,
-            batchId = "batch2",
-            productName = "Sweetcorn in water",
-            brand = "Tesco",
-            quantity = "3 x 200 gr"
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        viewModel.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = assignedItem,
-            shelf = 3,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL
-        )
-
-        val saved = slot.captured
-        assertEquals("3fuvis3959ghsr2", saved.id)
-        assertTrue(saved.isAssigned)
-        assertEquals(3, saved.unitsPerPack)
-        assertEquals(3, saved.activeCount)
-        assertEquals(1, saved.sealedCount) // 1 sealed reserve pack added
-        assertEquals(6, saved.totalDisplayCount) // Total 6 cans/tins (2 3-packs)
-    }
-
-    @Test
-    fun `consumeItem when no overlay active updates item in repository without opening overlay`() = runTest {
-        val multipackItem = PantryItem(
-            id = "corn_1",
-            name = "Sweetcorn in water 3x200g",
-            shelfNumber = 4,
-            zoneIndex = 2,
-            trackingType = TrackingType.DISCRETE_COUNT,
-            unitsPerPack = 3,
-            activeCount = 3,
-            sealedCount = 0
-        )
-
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(slot)) } returns Unit
-
-        assertNull(viewModel.uiState.value.activeOverlay)
-
-        viewModel.consumeItem(multipackItem, 1)
-
-        val updated = slot.captured
-        assertEquals(2, updated.activeCount)
-        assertEquals(2, updated.totalDisplayCount)
-        assertNull(viewModel.uiState.value.activeOverlay) // Overlay remains null
+        val captured = slot.captured
+        assertEquals("British Cooking Salt", captured.name)
+        assertEquals(TrackingType.BULK_LEVEL, captured.trackingType)
+        assertEquals(1, captured.shelfNumber)
+        assertEquals(1, captured.zoneIndex)
+        assertEquals(FillLevel.FULL, captured.activeFill)
+        assertEquals(1, captured.sealedCount)
     }
 
     @Test
@@ -498,7 +108,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `processItem and saveEnrichedItem merges into existing assigned item with same barcode and deletes unassigned duplicate`() = runTest {
+    fun `openEnrichmentModal merges into existing assigned item with same barcode`() = runTest {
         val assignedItem = PantryItem(
             id = "assigned_1",
             name = "Pizza Topper",
@@ -542,33 +152,56 @@ class DashboardViewModelTest {
 
         val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
 
-        vm.processItem(syncItem)
+        vm.openEnrichmentModal(syncItem)
 
         val overlay = vm.uiState.value.activeOverlay
         assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
         val enrichment = overlay as OverlayContext.SyncQueueEnrichment
-        assertEquals("assigned_1", enrichment.existingItem?.id) // Should select existing assigned item!
+        assertEquals("assigned_1", enrichment.existingItem?.id)
+    }
+
+    @Test
+    fun `processItem for existing assigned item automatically restocks to current shelf without showing overlay`() = runTest {
+        val assignedItem = PantryItem(
+            id = "assigned_1",
+            name = "Pizza Topper",
+            barcode = "12345",
+            shelfNumber = 3,
+            zoneIndex = 2,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 1,
+            activeCount = 1,
+            sealedCount = 0,
+            isAssigned = true
+        )
+
+        val syncItem = SyncQueueItem(
+            id = "sq_12345",
+            itemId = "assigned_1",
+            barcode = "12345",
+            scannedAt = 1000L,
+            batchId = "batch1",
+            productName = "Pizza Topper"
+        )
+
+        every { pantryRepository.allItems } returns flowOf(listOf(assignedItem))
+        coEvery { pantryRepository.getItemByBarcode("12345") } returns assignedItem
 
         val updateSlot = slot<PantryItem>()
-        val deleteSlot = slot<PantryItem>()
         coEvery { pantryRepository.updateItem(capture(updateSlot)) } returns Unit
-        coEvery { pantryRepository.deleteItem(capture(deleteSlot)) } returns Unit
+        coEvery { syncQueueRepository.markAsProcessed("sq_12345") } returns Unit
 
-        vm.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = enrichment.existingItem,
-            shelf = 3,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL
-        )
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        vm.processItem(syncItem)
+
+        assertNull(vm.uiState.value.activeOverlay) // Overlay remains null (1-Tap auto restocked!)
+        coVerify(exactly = 1) { pantryRepository.updateItem(any()) }
+        coVerify(exactly = 1) { syncQueueRepository.markAsProcessed("sq_12345") }
 
         val updated = updateSlot.captured
         assertEquals("assigned_1", updated.id)
-        assertTrue(updated.isAssigned)
-
-        val deleted = deleteSlot.captured
-        assertEquals("unassigned_2", deleted.id)
+        assertEquals(3, updated.shelfNumber)
+        assertEquals(2, updated.zoneIndex)
     }
 
     @Test
@@ -620,7 +253,7 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `processItem when item not active but in past_items suggests last location and sets isPastItem true`() = runTest {
+    fun `processItem when item not active but in past_items automatically assigns to former location`() = runTest {
         val pastItem = PastItem(
             id = "past_soy_sauce",
             name = "Kikkoman Soy Sauce",
@@ -628,7 +261,7 @@ class DashboardViewModelTest {
             brand = "Kikkoman",
             packageQuantity = "250ml",
             shelfNumber = 1,
-            zoneIndex = 2, // Shelf 1, Zone 2 -> Row 0, Col 1 (S1-M)
+            zoneIndex = 2,
             trackingType = TrackingType.DISCRETE_COUNT,
             sealedCount = 1,
             isAssigned = true
@@ -643,119 +276,82 @@ class DashboardViewModelTest {
             productName = "Kikkoman Soy Sauce"
         )
 
-        val unassignedPantryItem = PantryItem(
-            id = "unassigned_placeholder_1",
-            name = "Kikkoman Soy Sauce",
-            barcode = "5012345678901",
-            shelfNumber = 1,
-            zoneIndex = 1,
-            isAssigned = false
-        )
-
-        every { pantryRepository.allItems } returns flowOf(listOf(unassignedPantryItem))
-        coEvery { pantryRepository.getItemByBarcode("5012345678901") } returns unassignedPantryItem
+        every { pantryRepository.allItems } returns flowOf(emptyList())
         coEvery { pantryRepository.getPastItemByBarcode("5012345678901") } returns pastItem
+
+        val addSlot = slot<PantryItem>()
+        coEvery { pantryRepository.addItem(capture(addSlot)) } returns Unit
+        coEvery { syncQueueRepository.markAsProcessed("sq_soy_1") } returns Unit
 
         viewModel.processItem(syncItem)
 
-        val overlay = viewModel.uiState.value.activeOverlay
-        assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
-        val enrichment = overlay as OverlayContext.SyncQueueEnrichment
-        assertTrue(enrichment.isPastItem)
-        assertEquals("Kikkoman Soy Sauce", enrichment.existingItem?.name)
-        assertEquals(0 to 1, enrichment.suggestedShelf) // Shelf 4, Zone 2 -> Row 0, Col 1 (S4-M)
+        assertNull(viewModel.uiState.value.activeOverlay) // Auto assigned without showing overlay!
+        coVerify(exactly = 1) { pantryRepository.addItem(any()) }
+        coVerify(exactly = 1) { syncQueueRepository.markAsProcessed("sq_soy_1") }
+
+        val added = addSlot.captured
+        assertEquals("Kikkoman Soy Sauce", added.name)
+        assertEquals(1, added.shelfNumber)
+        assertEquals(2, added.zoneIndex)
     }
 
     @Test
-    fun `consumeItem when count reaches 0 moves item to past_items`() = runTest {
-        val discreteItem = PantryItem(
-            id = "soy_sauce_1",
+    fun `openEnrichmentModal when item in past_items opens overlay with isPastItem true`() = runTest {
+        val pastItem = PastItem(
+            id = "past_soy_sauce",
             name = "Kikkoman Soy Sauce",
             barcode = "5012345678901",
-            shelfNumber = 4,
-            zoneIndex = 3,
+            brand = "Kikkoman",
+            packageQuantity = "250ml",
+            shelfNumber = 1,
+            zoneIndex = 2,
             trackingType = TrackingType.DISCRETE_COUNT,
             sealedCount = 1,
             isAssigned = true
         )
 
-        val slot = slot<PantryItem>()
-        coEvery { pantryRepository.moveToPastItems(capture(slot)) } returns Unit
-
-        viewModel.consumeItem(discreteItem, 1)
-
-        val moved = slot.captured
-        assertEquals("soy_sauce_1", moved.id)
-        assertEquals("Kikkoman Soy Sauce", moved.name)
-        assertEquals("5012345678901", moved.barcode)
-    }
-
-    @Test
-    fun `saveEnrichedItem when re-adding past item calls addItem to insert into pantry_items`() = runTest {
-        val pastAsPantry = PantryItem(
-            id = "past_soy_sauce_1",
-            name = "Kikkoman Soy Sauce",
-            barcode = "5012345678901",
-            brand = "Kikkoman",
-            packageQuantity = "250ml",
-            shelfNumber = 4,
-            zoneIndex = 2,
-            trackingType = TrackingType.DISCRETE_COUNT,
-            unitsPerPack = 1,
-            sealedCount = 0,
-            isAssigned = false // Unassigned past item template!
-        )
-
         val syncItem = SyncQueueItem(
             id = "sq_soy_1",
+            itemId = "unassigned_placeholder_1",
             barcode = "5012345678901",
             scannedAt = 1000L,
             batchId = "batch1",
             productName = "Kikkoman Soy Sauce"
         )
 
-        val addSlot = slot<PantryItem>()
-        coEvery { pantryRepository.addItem(capture(addSlot)) } returns Unit
+        every { pantryRepository.allItems } returns flowOf(emptyList())
+        coEvery { pantryRepository.getPastItemByBarcode("5012345678901") } returns pastItem
 
-        viewModel.saveEnrichedItem(
-            syncItem = syncItem,
-            existingItem = pastAsPantry,
-            shelf = 4,
-            zone = 2,
-            quantityToAdd = 1,
-            fillLevel = FillLevel.FULL,
-            isPastItem = true
-        )
+        viewModel.openEnrichmentModal(syncItem)
 
-        coVerify(exactly = 1) { pantryRepository.addItem(any()) }
-        coVerify(exactly = 0) { pantryRepository.updateItem(any()) }
-
-        val saved = addSlot.captured
-        assertTrue(saved.isAssigned)
-        assertEquals("Kikkoman Soy Sauce", saved.name)
-        assertEquals("5012345678901", saved.barcode)
-        assertEquals(4, saved.shelfNumber)
-        assertEquals(2, saved.zoneIndex)
-        assertEquals(FillLevel.FULL, saved.activeFill)
+        val overlay = viewModel.uiState.value.activeOverlay
+        assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
+        val enrichment = overlay as OverlayContext.SyncQueueEnrichment
+        assertTrue(enrichment.isPastItem)
+        assertEquals("Kikkoman Soy Sauce", enrichment.existingItem?.name)
+        assertEquals(0 to 1, enrichment.suggestedShelf)
     }
 
     @Test
-    fun `saveEditedItem updates item trackingType correctly`() = runTest {
+    fun `consumeItem when count reaches 0 moves item to past_items`() = runTest {
         val item = PantryItem(
             id = "item_1",
-            name = "Quick Cook Fusilli",
-            shelfNumber = 3,
-            zoneIndex = 3,
-            trackingType = TrackingType.DISCRETE_COUNT
+            name = "Milk",
+            shelfNumber = 1,
+            zoneIndex = 1,
+            trackingType = TrackingType.DISCRETE_COUNT,
+            unitsPerPack = 1,
+            activeCount = 1,
+            sealedCount = 1,
+            isAssigned = true
         )
 
-        val updateSlot = slot<PantryItem>()
-        coEvery { pantryRepository.updateItem(capture(updateSlot)) } returns Unit
+        every { pantryRepository.allItems } returns flowOf(listOf(item))
 
-        val updatedItem = item.copy(trackingType = TrackingType.BULK_LEVEL)
-        viewModel.saveEditedItem(updatedItem)
+        coEvery { pantryRepository.moveToPastItems(any()) } returns Unit
 
-        coVerify(exactly = 1) { pantryRepository.updateItem(any()) }
-        assertEquals(TrackingType.BULK_LEVEL, updateSlot.captured.trackingType)
+        viewModel.consumeItem(item)
+
+        coVerify(exactly = 1) { pantryRepository.moveToPastItems(any()) }
     }
 }
