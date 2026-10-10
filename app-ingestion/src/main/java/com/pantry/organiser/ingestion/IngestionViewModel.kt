@@ -162,10 +162,8 @@ class IngestionViewModel @Inject constructor(
                 if (trimmedBarcode.length == 14 && trimmedBarcode.startsWith("0")) barcodeVariants.add(trimmedBarcode.substring(1))
 
                 // Search in local state first (allPantryItems + items)
-                var matched = _uiState.value.allPantryItems.find { item ->
-                    val itemBc = item.barcode?.trim()
-                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
-                } ?: _uiState.value.items.find { item ->
+                val candidateItems = (_uiState.value.allPantryItems + _uiState.value.items).distinctBy { it.id }
+                var matched = candidateItems.find { item ->
                     val itemBc = item.barcode?.trim()
                     itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
                 }

@@ -15,8 +15,8 @@ android {
         applicationId = "com.pantry.organiser.ingestion"
         minSdk = 24
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.8"
+        versionCode = 12
+        versionName = "1.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
