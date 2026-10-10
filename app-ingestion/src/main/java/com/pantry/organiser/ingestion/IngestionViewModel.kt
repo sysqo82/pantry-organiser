@@ -169,8 +169,20 @@ class IngestionViewModel @Inject constructor(
                 } catch (e: Exception) {
                     emptyList()
                 }
-                val matched = currentPantryItems.find { it.barcode == barcode }
-                    ?: _uiState.value.items.find { it.barcode == barcode }
+                val trimmedBarcode = barcode.trim()
+                val barcodeVariants = mutableSetOf(trimmedBarcode)
+                if (trimmedBarcode.length == 12) barcodeVariants.add("0$trimmedBarcode")
+                if (trimmedBarcode.length == 13 && trimmedBarcode.startsWith("0")) barcodeVariants.add(trimmedBarcode.substring(1))
+                if (trimmedBarcode.length == 13) barcodeVariants.add("0$trimmedBarcode")
+                if (trimmedBarcode.length == 14 && trimmedBarcode.startsWith("0")) barcodeVariants.add(trimmedBarcode.substring(1))
+
+                val matched = currentPantryItems.find { item ->
+                    val itemBc = item.barcode?.trim()
+                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
+                } ?: _uiState.value.items.find { item ->
+                    val itemBc = item.barcode?.trim()
+                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
+                }
 
                 if (matched != null) {
                     feedbackController.signalSuccess()
