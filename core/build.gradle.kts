@@ -36,7 +36,7 @@ android {
 
     buildTypes {
         release {
-            val url = customPocketBaseUrl ?: "https://pantry.lockpc.co.uk"
+            val url = "https://pantry.lockpc.co.uk"
             buildConfigField("String", "POCKETBASE_URL", "\"$url\"")
         }
         debug {
