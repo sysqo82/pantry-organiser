@@ -39,6 +39,7 @@ data class IngestionUiState(
     val scannedItems: List<ScannedItem> = emptyList(),
     val createdPantryItems: List<PantryItem> = emptyList(),
     val items: List<PantryItem> = emptyList(), // Placeholder for fetching current inventory
+    val allPantryItems: List<PantryItem> = emptyList(),
     val isSending: Boolean = false,
     val pantryId: String = "default-pantry",
     val scannedCheckItem: PantryItem? = null,
@@ -78,7 +79,7 @@ class IngestionViewModel @Inject constructor(
             try {
                 val currentPantryItems = syncService.fetchPantryItems(_uiState.value.pantryId)
                 val assignedItems = currentPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
-                _uiState.update { it.copy(items = assignedItems) }
+                _uiState.update { it.copy(items = assignedItems, allPantryItems = currentPantryItems) }
             } catch (e: Exception) {
                 Log.e("IngestionVM", "Failed to fetch pantry items: ${e.message}")
             }
@@ -88,28 +89,17 @@ class IngestionViewModel @Inject constructor(
         realtimeSyncJob = viewModelScope.launch {
             syncService.observePantryItems(_uiState.value.pantryId).collect { newItem ->
                 _uiState.update { state ->
-                    val updatedList = state.items.toMutableList()
-                    val existingIndex = updatedList.indexOfFirst { it.id == newItem.id }
-                    val barcodeIndex = if (existingIndex < 0 && !newItem.barcode.isNullOrBlank()) {
-                        updatedList.indexOfFirst { it.barcode == newItem.barcode }
-                    } else -1
+                    val allList = state.allPantryItems.toMutableList()
+                    val existingIndex = allList.indexOfFirst { it.id == newItem.id }
 
-                    val isAvailable = newItem.isAssigned && newItem.hasStock && newItem.sealedCount >= 0
-
-                    if (isAvailable) {
-                        if (existingIndex >= 0) {
-                            updatedList[existingIndex] = newItem
-                        } else if (barcodeIndex >= 0) {
-                            updatedList[barcodeIndex] = newItem
-                        } else {
-                            updatedList.add(newItem)
-                        }
+                    if (existingIndex >= 0) {
+                        allList[existingIndex] = newItem
                     } else {
-                        if (existingIndex >= 0) {
-                            updatedList.removeAt(existingIndex)
-                        }
+                        allList.add(newItem)
                     }
-                    state.copy(items = updatedList.sortPantryItems())
+
+                    val assignedItems = allList.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
+                    state.copy(items = assignedItems, allPantryItems = allList)
                 }
             }
         }
@@ -164,11 +154,6 @@ class IngestionViewModel @Inject constructor(
     private fun handleBarcode(barcode: String) {
         if (_uiState.value.mode == IngestionMode.CHECK) {
             viewModelScope.launch {
-                val currentPantryItems = try {
-                    syncService.fetchPantryItems(_uiState.value.pantryId)
-                } catch (e: Exception) {
-                    emptyList()
-                }
                 val trimmedBarcode = barcode.trim()
                 val barcodeVariants = mutableSetOf(trimmedBarcode)
                 if (trimmedBarcode.length == 12) barcodeVariants.add("0$trimmedBarcode")
@@ -176,12 +161,31 @@ class IngestionViewModel @Inject constructor(
                 if (trimmedBarcode.length == 13) barcodeVariants.add("0$trimmedBarcode")
                 if (trimmedBarcode.length == 14 && trimmedBarcode.startsWith("0")) barcodeVariants.add(trimmedBarcode.substring(1))
 
-                val matched = currentPantryItems.find { item ->
+                // Search in local state first (allPantryItems + items)
+                val candidateItems = (_uiState.value.allPantryItems + _uiState.value.items).distinctBy { it.id }
+                var matched = candidateItems.find { item ->
                     val itemBc = item.barcode?.trim()
                     itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
-                } ?: _uiState.value.items.find { item ->
-                    val itemBc = item.barcode?.trim()
-                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
+                }
+
+                // If not found locally, fetch fresh from PocketBase
+                if (matched == null) {
+                    val freshItems = try {
+                        syncService.fetchPantryItems(_uiState.value.pantryId)
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                    matched = freshItems.find { item ->
+                        val itemBc = item.barcode?.trim()
+                        itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
+                    }
+                    if (matched != null) {
+                        _uiState.update { state ->
+                            val updatedAll = (state.allPantryItems + freshItems).distinctBy { it.id }
+                            val assignedItems = updatedAll.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
+                            state.copy(items = assignedItems, allPantryItems = updatedAll)
+                        }
+                    }
                 }
 
                 if (matched != null) {
