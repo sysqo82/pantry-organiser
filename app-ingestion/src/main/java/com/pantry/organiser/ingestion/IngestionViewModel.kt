@@ -161,40 +161,29 @@ class IngestionViewModel @Inject constructor(
                 if (trimmedBarcode.length == 13) barcodeVariants.add("0$trimmedBarcode")
                 if (trimmedBarcode.length == 14 && trimmedBarcode.startsWith("0")) barcodeVariants.add(trimmedBarcode.substring(1))
 
-                // Search in local state first (allPantryItems + items)
-                val candidateItems = (_uiState.value.allPantryItems + _uiState.value.items).distinctBy { it.id }
-                var matched = candidateItems.find { item ->
-                    val itemBc = item.barcode?.trim()
-                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
+                // Check server's DB directly
+                val serverItems = try {
+                    syncService.fetchPantryItems(_uiState.value.pantryId)
+                } catch (e: Exception) {
+                    emptyList()
                 }
 
-                // If not found locally, fetch fresh from PocketBase
-                if (matched == null) {
-                    val freshItems = try {
-                        syncService.fetchPantryItems(_uiState.value.pantryId)
-                    } catch (e: Exception) {
-                        emptyList()
-                    }
-                    matched = freshItems.find { item ->
-                        val itemBc = item.barcode?.trim()
-                        itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
-                    }
-                    if (matched != null) {
-                        _uiState.update { state ->
-                            val updatedAll = (state.allPantryItems + freshItems).distinctBy { it.id }
-                            val assignedItems = updatedAll.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
-                            state.copy(items = assignedItems, allPantryItems = updatedAll)
-                        }
-                    }
+                val matched = serverItems.find { item ->
+                    val itemBc = item.barcode?.trim()
+                    itemBc != null && barcodeVariants.any { it.equals(itemBc, ignoreCase = true) }
                 }
 
                 if (matched != null) {
                     feedbackController.signalSuccess()
                     _uiState.update { state ->
+                        val updatedAll = (state.allPantryItems + serverItems).distinctBy { it.id }
+                        val assignedItems = updatedAll.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
                         state.copy(
                             mode = IngestionMode.HOME,
                             scannedCheckItem = matched,
-                            checkedNotFound = null
+                            checkedNotFound = null,
+                            items = assignedItems,
+                            allPantryItems = updatedAll
                         )
                     }
                 } else {
@@ -293,6 +282,13 @@ class IngestionViewModel @Inject constructor(
             val currentScanned = _uiState.value.scannedItems
             val createdItemIds = mutableListOf<String>()
 
+            // Fetch existing server items to check for duplicate barcodes
+            val existingServerItems = try {
+                syncService.fetchPantryItems(_uiState.value.pantryId)
+            } catch (e: Exception) {
+                emptyList()
+            }
+
             // Create unassigned pantry_item records on PocketBase ONLY when user clicks "Send to Pantry"
             currentScanned.forEach { item ->
                 val inferredUnits = PantryItem.inferUnitsPerPack(item.productName, item.quantity)
@@ -301,33 +297,70 @@ class IngestionViewModel @Inject constructor(
                     if (inferredUnits > 1) 0 else 1
                 } else 0
 
-                val newPantryItem = PantryItem(
-                    id = "",
-                    name = item.productName.ifBlank { "Unknown Product" },
-                    barcode = item.barcode,
-                    brand = item.brand,
-                    packageQuantity = item.quantity,
-                    imageUrl = item.imageUrl,
-                    apiImageUrl = item.imageUrl,
-                    shelfNumber = 1,
-                    zoneIndex = 1,
-                    trackingType = determinedType,
-                    sealedCount = initialSealed,
-                    unitsPerPack = inferredUnits,
-                    activeCount = inferredUnits,
-                    isAssigned = false, // Unassigned
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
-                )
+                val trimmedBarcode = item.barcode.trim()
+                val existingMatch = existingServerItems.find { existing ->
+                    val existingBc = existing.barcode?.trim()
+                    existingBc != null && existingBc.equals(trimmedBarcode, ignoreCase = true)
+                }
 
-                try {
-                    val created = syncService.createPantryItem(newPantryItem)
-                    if (created != null && created.id.isNotBlank() && !created.id.startsWith("local_")) {
-                        Log.d("IngestionVM", "Successfully created pantry item on PB for ${item.barcode}: ${created.id}")
-                        createdItemIds.add(created.id)
+                if (existingMatch != null) {
+                    val shouldUpdateName = existingMatch.name.isBlank() || existingMatch.name.equals("Unknown Product", ignoreCase = true)
+                    val updatedName = if (shouldUpdateName && item.productName.isNotBlank() && !item.productName.equals("Unknown Product", ignoreCase = true)) {
+                        item.productName
+                    } else {
+                        existingMatch.name
                     }
-                } catch (e: Exception) {
-                    Log.e("IngestionVM", "Failed to create pantry item on PB for ${item.barcode}: ${e.message}")
+
+                    val updatedItem = existingMatch.copy(
+                        name = updatedName,
+                        brand = item.brand.takeIf { !it.isNullOrBlank() } ?: existingMatch.brand,
+                        packageQuantity = item.quantity.takeIf { !it.isNullOrBlank() } ?: existingMatch.packageQuantity,
+                        imageUrl = item.imageUrl.takeIf { !it.isNullOrBlank() } ?: existingMatch.imageUrl,
+                        apiImageUrl = item.imageUrl.takeIf { !it.isNullOrBlank() } ?: existingMatch.apiImageUrl,
+                        updatedAt = System.currentTimeMillis()
+                    )
+
+                    try {
+                        val updated = syncService.updatePantryItem(updatedItem)
+                        if (updated != null && updated.id.isNotBlank()) {
+                            Log.d("IngestionVM", "Updated existing pantry item on PB for barcode ${item.barcode}: ${updated.id}")
+                            createdItemIds.add(updated.id)
+                        } else {
+                            createdItemIds.add(existingMatch.id)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("IngestionVM", "Failed to update existing pantry item for ${item.barcode}: ${e.message}")
+                        createdItemIds.add(existingMatch.id)
+                    }
+                } else {
+                    val newPantryItem = PantryItem(
+                        id = "",
+                        name = item.productName.ifBlank { "Unknown Product" },
+                        barcode = item.barcode,
+                        brand = item.brand,
+                        packageQuantity = item.quantity,
+                        imageUrl = item.imageUrl,
+                        apiImageUrl = item.imageUrl,
+                        shelfNumber = 1,
+                        zoneIndex = 1,
+                        trackingType = determinedType,
+                        sealedCount = initialSealed,
+                        unitsPerPack = inferredUnits,
+                        activeCount = inferredUnits,
+                        isAssigned = false, // Unassigned
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+
+                    try {
+                        val created = syncService.createPantryItem(newPantryItem)
+                        if (created != null && created.id.isNotBlank() && !created.id.startsWith("local_")) {
+                            Log.d("IngestionVM", "Successfully created pantry item on PB for ${item.barcode}: ${created.id}")
+                            createdItemIds.add(created.id)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("IngestionVM", "Failed to create pantry item on PB for ${item.barcode}: ${e.message}")
+                    }
                 }
             }
 

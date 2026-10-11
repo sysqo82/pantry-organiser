@@ -129,6 +129,13 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         it.isNotBlank() && it != "N/A" && !it.contains("/api/files/") 
     }
 
+    val rawLocalUri = localImageUri?.takeIf { it.isNotBlank() && it != "N/A" }
+    val effectiveLocalUri = if (rawLocalUri != null && rawLocalUri.contains("/files/product_images/")) {
+        null
+    } else {
+        rawLocalUri
+    }
+
     return PantryItem(
         id = id.takeIf { !it.isNullOrBlank() } ?: ("local_" + UUID.randomUUID().toString()),
         name = name.ifBlank { "Unknown Product" },
@@ -138,7 +145,7 @@ fun PocketBasePantryItem.toLocal(): PantryItem {
         imageUrl = resolvedOffUrl,
         apiImageUrl = resolvedOffUrl,
         localImageUrl = resolvedCustomUrl,
-        localImageUri = localImageUri?.takeIf { it.isNotBlank() && it != "N/A" },
+        localImageUri = effectiveLocalUri,
         shelfNumber = mappedShelf,
         zoneIndex = mappedZone,
         trackingType = mappedTrackingType,
