@@ -25,7 +25,8 @@ import java.net.UnknownHostException
 
 class PocketBaseSyncService(
     private val client: HttpClient,
-    private val baseUrl: String
+    private val baseUrl: String,
+    private val authRepository: AuthRepository? = null
 ) : SyncService {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -38,6 +39,9 @@ class PocketBaseSyncService(
         try {
             Log.d("PocketBaseSync", "Dispatching batch to: $url (Items: ${payload.safeItems.size})")
             val response = client.post(url) {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 contentType(ContentType.Application.Json)
                 setBody(payload)
                 timeout {
@@ -59,6 +63,9 @@ class PocketBaseSyncService(
     private suspend fun subscribe(clientId: String, collection: String) {
         try {
             val response = client.post("$baseUrl/api/realtime") {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 contentType(ContentType.Application.Json)
                 setBody(RealtimeSubscribeRequest(clientId, listOf(collection)))
             }
@@ -76,6 +83,9 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/batch_payloads/records"
         return try {
             var response = client.get(url) {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 parameter("filter", "pantryId=\"$pantryId\"")
                 parameter("sort", "-created")
                 parameter("perPage", 50)
@@ -83,13 +93,20 @@ class PocketBaseSyncService(
             if (!response.status.isSuccess()) {
                 Log.w("PocketBaseSync", "Fetch batches with filter failed (${response.status}), retrying without filter parameter...")
                 response = client.get(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
                     parameter("sort", "-created")
                     parameter("perPage", 50)
                 }
             }
             if (!response.status.isSuccess()) {
                 Log.w("PocketBaseSync", "Fetch batches with parameters failed (${response.status}), retrying plain GET...")
-                response = client.get(url)
+                response = client.get(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
+                }
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -194,6 +211,9 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/pantry_items/records"
         return try {
             val response = client.get(url) {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 parameter("perPage", 500)
             }
             if (!response.status.isSuccess()) {
@@ -225,6 +245,9 @@ class PocketBaseSyncService(
             try {
                 Log.d("PocketBaseSync", "Creating pantry_item (Attempt $attempt/3) with body: $jsonBody")
                 val httpResponse = client.post(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
                     contentType(ContentType.Application.Json)
                     setBody(jsonBody)
                 }
@@ -267,6 +290,9 @@ class PocketBaseSyncService(
             try {
                 Log.d("PocketBaseSync", "Updating pantry_item ${item.id} (Attempt $attempt/3) with body: $jsonBody")
                 val httpResponse = client.patch(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
                     contentType(ContentType.Application.Json)
                     setBody(jsonBody)
                 }
@@ -317,6 +343,9 @@ class PocketBaseSyncService(
                         })
                     }
                 ) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
                     method = HttpMethod.Patch
                 }
 
@@ -339,6 +368,9 @@ class PocketBaseSyncService(
 
                     Log.d("PocketBaseSync", "Patching local_image_url to PocketBase: $patchBody")
                     val patchResponse = client.patch(url) {
+                        authRepository?.getToken()?.let { token ->
+                            header(HttpHeaders.Authorization, "Bearer $token")
+                        }
                         contentType(ContentType.Application.Json)
                         setBody(patchBody)
                     }
@@ -364,7 +396,11 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/pantry_items/records/$itemId"
         for (attempt in 1..3) {
             try {
-                val success = client.delete(url).status.isSuccess()
+                val success = client.delete(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
+                }.status.isSuccess()
                 if (success) {
                     delay(250)
                     return true
@@ -380,6 +416,9 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/past_items/records"
         return try {
             val response = client.get(url) {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
                 parameter("perPage", 500)
             }
             if (!response.status.isSuccess()) {
@@ -405,6 +444,9 @@ class PocketBaseSyncService(
             try {
                 Log.d("PocketBaseSync", "Creating past_item (Attempt $attempt/3) with body: $jsonBody")
                 val httpResponse = client.post(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
                     contentType(ContentType.Application.Json)
                     setBody(jsonBody)
                 }
@@ -429,7 +471,11 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/past_items/records/$itemId"
         for (attempt in 1..3) {
             try {
-                val success = client.delete(url).status.isSuccess()
+                val success = client.delete(url) {
+                    authRepository?.getToken()?.let { token ->
+                        header(HttpHeaders.Authorization, "Bearer $token")
+                    }
+                }.status.isSuccess()
                 if (success) {
                     delay(250)
                     return true

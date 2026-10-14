@@ -34,11 +34,20 @@ data class DashboardUiState(
 class DashboardViewModel @Inject constructor(
     private val syncQueueRepository: SyncQueueRepository,
     private val pantryRepository: PantryRepository,
-    private val openFoodFactsProber: OpenFoodFactsProber
+    private val openFoodFactsProber: OpenFoodFactsProber,
+    private val authRepository: com.pantry.organiser.core.network.AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    
+    val isLoggedIn = authRepository.isLoggedIn
+
+    fun login(email: String, pass: String): Result<Unit> {
+        return kotlinx.coroutines.runBlocking { 
+             authRepository.login(email, pass)
+        }
+    }
 
     init {
         viewModelScope.launch {

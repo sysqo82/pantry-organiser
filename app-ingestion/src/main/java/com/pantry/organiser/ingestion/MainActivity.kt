@@ -11,6 +11,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -45,7 +47,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    IngestionScreen(viewModel)
+                    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+                    if (isLoggedIn) {
+                        IngestionScreen(viewModel)
+                    } else {
+                        com.pantry.organiser.core.ui.LoginScreen(onLogin = viewModel::login)
+                    }
                 }
             }
         }

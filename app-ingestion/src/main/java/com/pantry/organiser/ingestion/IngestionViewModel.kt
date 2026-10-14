@@ -51,13 +51,22 @@ class IngestionViewModel @Inject constructor(
     private val scanner: ContinuousScanner,
     private val feedbackController: FeedbackController,
     private val syncService: SyncService,
-    private val offRepository: OpenFoodFactsRepository
+    private val offRepository: OpenFoodFactsRepository,
+    private val authRepository: com.pantry.organiser.core.network.AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(IngestionUiState())
     val uiState: StateFlow<IngestionUiState> = _uiState.asStateFlow()
 
     val effects = feedbackController.effects
+
+    val isLoggedIn = authRepository.isLoggedIn
+
+    fun login(email: String, pass: String): Result<Unit> {
+        return kotlinx.coroutines.runBlocking { 
+             authRepository.login(email, pass)
+        }
+    }
 
     private var realtimeSyncJob: Job? = null
 

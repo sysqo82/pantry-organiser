@@ -44,7 +44,9 @@ class IngestionViewModelTest {
 
         every { scanner.barcodes } returns barcodeFlow
         every { feedbackController.effects } returns flowOf()
-        viewModel = IngestionViewModel(scanner, feedbackController, syncService, offRepository)
+        val authRepository = mockk<com.pantry.organiser.core.network.AuthRepository>(relaxed = true)
+        every { authRepository.isLoggedIn } returns kotlinx.coroutines.flow.MutableStateFlow(true)
+        viewModel = IngestionViewModel(scanner, feedbackController, syncService, offRepository, authRepository)
     }
 
     @After

@@ -61,8 +61,14 @@ object DashboardModule {
 
     @Provides
     @Singleton
-    fun provideSyncService(client: HttpClient): SyncService {
-        return PocketBaseSyncService(client, PantryConstants.POCKETBASE_URL)
+    fun provideAuthRepository(client: HttpClient, @ApplicationContext context: Context): com.pantry.organiser.core.network.AuthRepository {
+        return com.pantry.organiser.core.network.AuthRepository(client, PantryConstants.POCKETBASE_URL, context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSyncService(client: HttpClient, authRepository: com.pantry.organiser.core.network.AuthRepository): SyncService {
+        return PocketBaseSyncService(client, PantryConstants.POCKETBASE_URL, authRepository)
     }
 
     @Provides
