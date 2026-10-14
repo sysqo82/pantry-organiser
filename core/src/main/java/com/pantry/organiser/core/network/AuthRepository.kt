@@ -8,6 +8,7 @@ import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,26 @@ class AuthRepository(
 
     private val _isLoggedIn = MutableStateFlow(getToken() != null)
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+    private val authScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    init {
+        authScope.launch {
+            // Initial refresh on startup (or when singleton is created)
+            if (getToken() != null) {
+                refreshAuthTokenIfNeeded()
+            }
+            
+            // Continuous heartbeat for 24/7 always-on devices
+            while (isActive) {
+                delay(24 * 60 * 60 * 1000L) // Wait 24 hours
+                if (getToken() != null) {
+                    Log.d(TAG, "Running daily proactive auth token refresh...")
+                    refreshAuthTokenIfNeeded()
+                }
+            }
+        }
+    }
 
     fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
     

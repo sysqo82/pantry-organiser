@@ -55,9 +55,6 @@ class DashboardViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            authRepository.refreshAuthTokenIfNeeded()
-        }
-        viewModelScope.launch {
             combine(
                 syncQueueRepository.getPendingItems(),
                 pantryRepository.allItems,

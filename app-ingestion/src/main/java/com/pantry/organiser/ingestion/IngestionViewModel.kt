@@ -76,9 +76,6 @@ class IngestionViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            authRepository.refreshAuthTokenIfNeeded()
-        }
-        viewModelScope.launch {
             scanner.barcodes.collect { barcode ->
                 handleBarcode(barcode)
             }
