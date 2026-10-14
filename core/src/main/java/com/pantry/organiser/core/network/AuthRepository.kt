@@ -34,6 +34,27 @@ class AuthRepository(
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
     fun getToken(): String? = prefs.getString(KEY_TOKEN, null)
+    
+    suspend fun refreshAuthTokenIfNeeded() {
+        val currentToken = getToken() ?: return
+        try {
+            val response = client.post("$baseUrl/api/collections/users/auth-refresh") {
+                header(HttpHeaders.Authorization, "Bearer $currentToken")
+                contentType(ContentType.Application.Json)
+            }
+            if (response.status.isSuccess()) {
+                val authResponse: AuthResponse = response.body()
+                saveToken(authResponse.token)
+                Log.d(TAG, "Successfully refreshed Auth Token in background.")
+            } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                Log.w(TAG, "Auth Token expired or invalid. Auto-logging out.")
+                logout()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to refresh auth token (could be offline). Preserving existing token.", e)
+            // Note: If offline, we keep the token so the app continues to operate locally.
+        }
+    }
 
     suspend fun login(email: String, password: String): Result<Unit> {
         return try {

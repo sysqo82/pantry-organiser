@@ -67,10 +67,17 @@ class IngestionViewModel @Inject constructor(
              authRepository.login(email, pass)
         }
     }
+    
+    fun logout() {
+        authRepository.logout()
+    }
 
     private var realtimeSyncJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            authRepository.refreshAuthTokenIfNeeded()
+        }
         viewModelScope.launch {
             scanner.barcodes.collect { barcode ->
                 handleBarcode(barcode)

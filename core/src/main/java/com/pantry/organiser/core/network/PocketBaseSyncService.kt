@@ -49,6 +49,9 @@ class PocketBaseSyncService(
                 }
             }
             Log.d("PocketBaseSync", "Batch dispatched successfully. Status: ${response.status}")
+            if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                authRepository?.logout()
+            }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (e: Exception) { "No error body" }
                 Log.e("PocketBaseSync", "Server error (${response.status}): $errorBody")
@@ -108,6 +111,9 @@ class PocketBaseSyncService(
                     }
                 }
             }
+            if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                authRepository?.logout()
+            }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
                 Log.e("PocketBaseSync", "Failed to fetch batches (${response.status}): $errorBody")
@@ -136,6 +142,9 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
                         Log.e("PocketBaseSync", "Realtime stream error for $pantryId. Status: ${response.status}, Body: $errorBody")
@@ -216,6 +225,9 @@ class PocketBaseSyncService(
                 }
                 parameter("perPage", 500)
             }
+            if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                authRepository?.logout()
+            }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
                 Log.e("PocketBaseSync", "Failed to fetch pantry_items (${response.status}): $errorBody")
@@ -260,6 +272,9 @@ class PocketBaseSyncService(
                     delay(250) // 250ms spacing between writes to prevent PocketBase SQLite write lock collisions
                     return createdLocal
                 } else {
+                    if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
                     Log.e("PocketBaseSync", "Create attempt $attempt failed (${httpResponse.status}): $responseText")
                 }
             } catch (e: Exception) {
@@ -304,6 +319,9 @@ class PocketBaseSyncService(
                     delay(250) // 250ms spacing between writes
                     return updatedLocal
                 } else {
+                    if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
                     Log.e("PocketBaseSync", "Update attempt $attempt failed (${httpResponse.status}): $responseText")
                 }
             } catch (e: Exception) {
@@ -377,9 +395,13 @@ class PocketBaseSyncService(
                     if (patchResponse.status.isSuccess()) {
                         val patchedResponse: PocketBasePantryItem = patchResponse.body()
                         return@withLock patchedResponse.toLocal().copy(localImageUrl = hostedCustomUrl)
+                    } else if (patchResponse.status == HttpStatusCode.Unauthorized || patchResponse.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
                     }
                     delay(250)
                     return@withLock finalItem
+                } else if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
+                    authRepository?.logout()
                 }
             } catch (e: Exception) {
                 lastException = e
@@ -396,11 +418,15 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/pantry_items/records/$itemId"
         for (attempt in 1..3) {
             try {
-                val success = client.delete(url) {
+                val response = client.delete(url) {
                     authRepository?.getToken()?.let { token ->
                         header(HttpHeaders.Authorization, "Bearer $token")
                     }
-                }.status.isSuccess()
+                }
+                if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                    authRepository?.logout()
+                }
+                val success = response.status.isSuccess()
                 if (success) {
                     delay(250)
                     return true
@@ -420,6 +446,9 @@ class PocketBaseSyncService(
                     header(HttpHeaders.Authorization, "Bearer $token")
                 }
                 parameter("perPage", 500)
+            }
+            if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                authRepository?.logout()
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -456,6 +485,8 @@ class PocketBaseSyncService(
                     val createdLocal = response.toPastLocal()
                     delay(250)
                     return createdLocal
+                } else if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
+                    authRepository?.logout()
                 }
             } catch (e: Exception) {
                 lastException = e
@@ -471,11 +502,15 @@ class PocketBaseSyncService(
         val url = "$baseUrl/api/collections/past_items/records/$itemId"
         for (attempt in 1..3) {
             try {
-                val success = client.delete(url) {
+                val response = client.delete(url) {
                     authRepository?.getToken()?.let { token ->
                         header(HttpHeaders.Authorization, "Bearer $token")
                     }
-                }.status.isSuccess()
+                }
+                if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                    authRepository?.logout()
+                }
+                val success = response.status.isSuccess()
                 if (success) {
                     delay(250)
                     return true
@@ -502,6 +537,12 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
+                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
                         Log.e("PocketBaseSync", "Realtime pantry_items stream error. Status: ${response.status}, Body: $errorBody")
@@ -587,6 +628,12 @@ class PocketBaseSyncService(
                         socketTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
                     }
                 }.execute { response ->
+                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
+                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                        authRepository?.logout()
+                    }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
                         Log.e("PocketBaseSync", "Realtime past_items stream error. Status: ${response.status}, Body: $errorBody")

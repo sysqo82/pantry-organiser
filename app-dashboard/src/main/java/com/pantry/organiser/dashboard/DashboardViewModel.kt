@@ -48,8 +48,15 @@ class DashboardViewModel @Inject constructor(
              authRepository.login(email, pass)
         }
     }
+    
+    fun logout() {
+        authRepository.logout()
+    }
 
     init {
+        viewModelScope.launch {
+            authRepository.refreshAuthTokenIfNeeded()
+        }
         viewModelScope.launch {
             combine(
                 syncQueueRepository.getPendingItems(),
