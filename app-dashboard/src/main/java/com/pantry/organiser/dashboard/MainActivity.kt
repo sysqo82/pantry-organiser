@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.pantry.organiser.dashboard.sensor.PantryDoorSensorManager
 import com.pantry.organiser.dashboard.ui.DashboardScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,7 +38,12 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DashboardScreen(viewModel)
+                    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+                    if (isLoggedIn) {
+                        DashboardScreen(viewModel)
+                    } else {
+                        com.pantry.organiser.core.ui.LoginScreen(onLogin = viewModel::login)
+                    }
                 }
             }
         }

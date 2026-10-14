@@ -58,9 +58,15 @@ abstract class IngestionModule {
 
         @Provides
         @Singleton
-        fun provideSyncService(client: HttpClient): SyncService {
+        fun provideAuthRepository(client: HttpClient, @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context): com.pantry.organiser.core.network.AuthRepository {
+            return com.pantry.organiser.core.network.AuthRepository(client, PantryConstants.POCKETBASE_URL, context)
+        }
+
+        @Provides
+        @Singleton
+        fun provideSyncService(client: HttpClient, authRepository: com.pantry.organiser.core.network.AuthRepository): SyncService {
             // In a real app, baseUrl would come from build config or settings
-            return PocketBaseSyncService(client, PantryConstants.POCKETBASE_URL)
+            return PocketBaseSyncService(client, PantryConstants.POCKETBASE_URL, authRepository)
         }
 
         @Provides

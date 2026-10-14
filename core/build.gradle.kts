@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.jetbrains.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.compose.compiler)
 }
 
 val localProperties = Properties()
@@ -32,6 +33,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     buildTypes {
@@ -55,6 +57,13 @@ dependencies {
     api(libs.ktor.serialization.kotlinx.json)
     api(libs.androidx.room.runtime)
     api(libs.androidx.room.ktx)
+    
+    // Compose for UI elements
+    api(platform(libs.androidx.compose.bom))
+    api(libs.androidx.ui)
+    api(libs.androidx.ui.graphics)
+    api(libs.androidx.ui.tooling.preview)
+    api(libs.androidx.material3)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

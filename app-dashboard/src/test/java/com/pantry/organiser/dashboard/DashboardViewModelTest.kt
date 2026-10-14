@@ -28,6 +28,7 @@ class DashboardViewModelTest {
     private val syncQueueRepository = mockk<SyncQueueRepository>(relaxed = true)
     private val pantryRepository = mockk<PantryRepository>(relaxed = true)
     private val openFoodFactsProber = mockk<OpenFoodFactsProber>(relaxed = true)
+    private val authRepository = mockk<com.pantry.organiser.core.network.AuthRepository>(relaxed = true)
     private lateinit var viewModel: DashboardViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -40,7 +41,8 @@ class DashboardViewModelTest {
         every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
         every { pantryRepository.allItems } returns flowOf(emptyList())
         every { pantryRepository.pastItems } returns flowOf(emptyList())
-        viewModel = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        every { authRepository.isLoggedIn } returns kotlinx.coroutines.flow.MutableStateFlow(true)
+        viewModel = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
     }
 
     @After
@@ -97,7 +99,7 @@ class DashboardViewModelTest {
         val unsortedItems = listOf(itemS1, itemS4R, itemS4M)
         every { pantryRepository.allItems } returns flowOf(unsortedItems)
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
         val stateItems = vm.uiState.value.pantryItems
 
         // Expected spatial order: S1-L (shelf 1, zone 1), S4-M (shelf 4, zone 2), S4-R (shelf 4, zone 3)
@@ -150,7 +152,7 @@ class DashboardViewModelTest {
         every { pantryRepository.allItems } returns flowOf(listOf(assignedItem, unassignedItem))
         coEvery { pantryRepository.getItemByBarcode("12345") } returns assignedItem
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
 
         vm.openEnrichmentModal(syncItem)
 
@@ -191,7 +193,7 @@ class DashboardViewModelTest {
         coEvery { pantryRepository.updateItem(capture(updateSlot)) } returns Unit
         coEvery { syncQueueRepository.markAsProcessed("sq_12345") } returns Unit
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
         vm.processItem(syncItem)
 
         assertNull(vm.uiState.value.activeOverlay) // Overlay remains null (1-Tap auto restocked!)
@@ -226,7 +228,7 @@ class DashboardViewModelTest {
         every { syncQueueRepository.getPendingItems() } returns flowOf(emptyList())
         every { pantryRepository.allItems } returns flowOf(listOf(item1, item2))
 
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
 
         assertEquals(0, vm.uiState.value.pendingItems.size)
         assertEquals(2, vm.uiState.value.pantryItems.size)
@@ -244,7 +246,7 @@ class DashboardViewModelTest {
         )
 
         every { syncQueueRepository.getPendingItems() } returns flowOf(listOf(pendingItem))
-        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber)
+        val vm = DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
 
         vm.clearAllPendingItems()
 
