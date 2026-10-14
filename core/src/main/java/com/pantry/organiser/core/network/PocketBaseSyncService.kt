@@ -28,6 +28,8 @@ class PocketBaseSyncService(
     private val baseUrl: String,
     private val authRepository: AuthRepository? = null
 ) : SyncService {
+    private val remoteLogger = RemoteLogger(client, baseUrl, authRepository)
+    
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
@@ -134,7 +136,7 @@ class PocketBaseSyncService(
         while (currentCoroutineContext().isActive) {
             try {
                 val url = "$baseUrl/api/realtime"
-                Log.d("PocketBaseSync", "Connecting to realtime: $url for $pantryId")
+                remoteLogger.d("PocketBaseSync", "Connecting to realtime: $url for $pantryId")
                 client.prepareGet(url) {
                     timeout {
                         requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -147,18 +149,18 @@ class PocketBaseSyncService(
                     }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
-                        Log.e("PocketBaseSync", "Realtime stream error for $pantryId. Status: ${response.status}, Body: $errorBody")
+                        remoteLogger.e("PocketBaseSync", "Realtime stream error for $pantryId. Status: ${response.status}, Body: $errorBody")
                         throw Exception("HTTP ${response.status}: $errorBody")
                     }
                     retryDelay = 5000L
-                    Log.d("PocketBaseSync", "Realtime stream opened for $pantryId. Status: ${response.status}")
+                    remoteLogger.i("PocketBaseSync", "Realtime stream opened for $pantryId. Status: ${response.status}")
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
                         val line = try {
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            Log.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}")
+                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}", e)
                             null
                         } ?: break
 
@@ -170,7 +172,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            Log.d("PocketBaseSync", "Received clientId: $clientId. Subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to batch_payloads...")
                                             coroutineScope {
                                                 launch { subscribe(clientId, "batch_payloads") }
                                             }
@@ -180,18 +182,19 @@ class PocketBaseSyncService(
                                         if (event.action == "create" || event.action == "update") {
                                             val payload = json.decodeFromJsonElement<BatchPayload>(event.record)
                                             if (payload.pantryId == pantryId) {
+                                                remoteLogger.d("PocketBaseSync", "Received batch payload for pantryId ${payload.pantryId} with ${payload.safeItems.size} items")
                                                 emit(payload)
                                             }
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    Log.w("PocketBaseSync", "Failed to parse realtime data from $pantryId: $data. Error: ${e.message}")
+                                    remoteLogger.w("PocketBaseSync", "Failed to parse realtime data from $pantryId: $data. Error: ${e.message}", e)
                                 }
                             }
                         }
                     }
                 }
-                Log.d("PocketBaseSync", "Realtime stream closed for $pantryId. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.w("PocketBaseSync", "Realtime stream closed for $pantryId. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
@@ -200,16 +203,16 @@ class PocketBaseSyncService(
                                     e is SocketException ||
                                     e.cause is UnknownHostException
                 if (isNetworkDown) {
-                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
-                    Log.e("PocketBaseSync", "Connection error for $pantryId: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.e("PocketBaseSync", "Connection error for $pantryId: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
                 if (!currentCoroutineContext().isActive) break
                 delay(retryDelay)
                 retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
             } catch (t: Throwable) {
                 if (!currentCoroutineContext().isActive) throw t
-                Log.e("PocketBaseSync", "Unexpected fatal error in realtime observer for $pantryId", t)
+                remoteLogger.e("PocketBaseSync", "Unexpected fatal error in realtime observer for $pantryId", t)
                 if (!currentCoroutineContext().isActive) break
                 delay(10000)
             }
@@ -529,7 +532,7 @@ class PocketBaseSyncService(
         while (currentCoroutineContext().isActive) {
             try {
                 val url = "$baseUrl/api/realtime"
-                Log.d("PocketBaseSync", "Connecting to realtime pantry_items: $url")
+                remoteLogger.d("PocketBaseSync", "Connecting to realtime pantry_items: $url")
                 client.prepareGet(url) {
                     timeout {
                         requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -540,21 +543,20 @@ class PocketBaseSyncService(
                     if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
                         authRepository?.logout()
                     }
-                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
-                    }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
-                        Log.e("PocketBaseSync", "Realtime pantry_items stream error. Status: ${response.status}, Body: $errorBody")
+                        remoteLogger.e("PocketBaseSync", "Realtime pantry_items stream error. Status: ${response.status}, Body: $errorBody")
                         throw Exception("HTTP ${response.status}: $errorBody")
                     }
                     retryDelay = 5000L
+                    remoteLogger.i("PocketBaseSync", "Realtime pantry_items stream opened. Status: ${response.status}")
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
                         val line = try {
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
+                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime pantry_items: ${e.message}", e)
                             null
                         } ?: break
 
@@ -566,6 +568,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to pantry_items...")
                                             coroutineScope {
                                                 launch { subscribe(clientId, "pantry_items") }
                                             }
@@ -574,21 +577,23 @@ class PocketBaseSyncService(
                                         val event = json.decodeFromJsonElement<RealtimeEvent>(element)
                                         if (event.action == "create" || event.action == "update") {
                                             val pbItem = json.decodeFromJsonElement<PocketBasePantryItem>(event.record)
+                                            remoteLogger.d("PocketBaseSync", "Received realtime pantry_item update: ${pbItem.id} (action: ${event.action})")
                                             emit(pbItem.toLocal())
                                         } else if (event.action == "delete") {
                                             val pbItem = json.decodeFromJsonElement<PocketBasePantryItem>(event.record)
                                             val deletedItem = pbItem.toLocal().copy(sealedCount = -1)
+                                            remoteLogger.d("PocketBaseSync", "Received realtime pantry_item delete: ${pbItem.id}")
                                             emit(deletedItem)
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    Log.w("PocketBaseSync", "Failed to parse realtime pantry_items data: $data", e)
+                                    remoteLogger.w("PocketBaseSync", "Failed to parse realtime pantry_items data: $data", e)
                                 }
                             }
                         }
                     }
                 }
-                Log.d("PocketBaseSync", "Realtime pantry_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.w("PocketBaseSync", "Realtime pantry_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
@@ -597,16 +602,16 @@ class PocketBaseSyncService(
                                     e is SocketException ||
                                     e.cause is UnknownHostException
                 if (isNetworkDown) {
-                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
-                    Log.e("PocketBaseSync", "Connection or stream error in observePantryItems: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.e("PocketBaseSync", "Connection or stream error in observePantryItems: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
                 if (!currentCoroutineContext().isActive) break
                 delay(retryDelay)
                 retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
             } catch (t: Throwable) {
                 if (!currentCoroutineContext().isActive) throw t
-                Log.e("PocketBaseSync", "Fatal error in observePantryItems", t)
+                remoteLogger.e("PocketBaseSync", "Fatal error in observePantryItems", t)
                 if (!currentCoroutineContext().isActive) break
                 delay(10000)
             }
@@ -620,7 +625,7 @@ class PocketBaseSyncService(
         while (currentCoroutineContext().isActive) {
             try {
                 val url = "$baseUrl/api/realtime"
-                Log.d("PocketBaseSync", "Connecting to realtime past_items: $url")
+                remoteLogger.d("PocketBaseSync", "Connecting to realtime past_items: $url")
                 client.prepareGet(url) {
                     timeout {
                         requestTimeoutMillis = HttpTimeout.INFINITE_TIMEOUT_MS
@@ -631,21 +636,20 @@ class PocketBaseSyncService(
                     if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
                         authRepository?.logout()
                     }
-                    if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
-                    }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
-                        Log.e("PocketBaseSync", "Realtime past_items stream error. Status: ${response.status}, Body: $errorBody")
+                        remoteLogger.e("PocketBaseSync", "Realtime past_items stream error. Status: ${response.status}, Body: $errorBody")
                         throw Exception("HTTP ${response.status}: $errorBody")
                     }
                     retryDelay = 5000L
+                    remoteLogger.i("PocketBaseSync", "Realtime past_items stream opened. Status: ${response.status}")
                     val channel = response.bodyAsChannel()
                     while (!channel.isClosedForRead && currentCoroutineContext().isActive) {
                         val line = try {
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
+                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime past_items: ${e.message}", e)
                             null
                         } ?: break
 
@@ -657,6 +661,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to past_items...")
                                             coroutineScope {
                                                 launch { subscribe(clientId, "past_items") }
                                             }
@@ -665,17 +670,18 @@ class PocketBaseSyncService(
                                         val event = json.decodeFromJsonElement<RealtimeEvent>(element)
                                         if (event.action == "create" || event.action == "update" || event.action == "delete") {
                                             val pbItem = json.decodeFromJsonElement<PocketBasePantryItem>(event.record)
+                                            remoteLogger.d("PocketBaseSync", "Received realtime past_item update: ${pbItem.id}")
                                             emit(pbItem.toPastLocal())
                                         }
                                     }
                                 } catch (e: Exception) {
-                                    Log.w("PocketBaseSync", "Failed to parse realtime past_items data: $data", e)
+                                    remoteLogger.w("PocketBaseSync", "Failed to parse realtime past_items data: $data", e)
                                 }
                             }
                         }
                     }
                 }
-                Log.d("PocketBaseSync", "Realtime past_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.w("PocketBaseSync", "Realtime past_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
@@ -684,16 +690,16 @@ class PocketBaseSyncService(
                                     e is SocketException ||
                                     e.cause is UnknownHostException
                 if (isNetworkDown) {
-                    Log.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
-                    Log.e("PocketBaseSync", "Connection or stream error in observePastItems: ${e.message}. Retrying in ${retryDelay / 1000}s...")
+                    remoteLogger.e("PocketBaseSync", "Connection or stream error in observePastItems: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
                 if (!currentCoroutineContext().isActive) break
                 delay(retryDelay)
                 retryDelay = (retryDelay * 2).coerceAtMost(maxDelay)
             } catch (t: Throwable) {
                 if (!currentCoroutineContext().isActive) throw t
-                Log.e("PocketBaseSync", "Fatal error in observePastItems", t)
+                remoteLogger.e("PocketBaseSync", "Fatal error in observePastItems", t)
                 if (!currentCoroutineContext().isActive) break
                 delay(10000)
             }
