@@ -65,23 +65,22 @@ class PocketBaseSyncService(
         }
     }
 
-    private suspend fun subscribeMultiplexed(clientId: String) {
-        val collections = listOf("batch_payloads", "pantry_items", "past_items")
+    private suspend fun subscribe(clientId: String, collection: String) {
         try {
             val response = client.post("$baseUrl/api/realtime") {
                 authRepository?.getToken()?.let { token ->
                     header(HttpHeaders.Authorization, "Bearer $token")
                 }
                 contentType(ContentType.Application.Json)
-                setBody(RealtimeSubscribeRequest(clientId, collections))
+                setBody(RealtimeSubscribeRequest(clientId, listOf(collection)))
             }
             if (response.status.isSuccess()) {
-                remoteLogger.d("PocketBaseSync", "Successfully subscribed multiplexed to $collections")
+                Log.d("PocketBaseSync", "Successfully subscribed to $collection")
             } else {
-                remoteLogger.e("PocketBaseSync", "Failed to subscribe multiplexed: ${response.status}")
+                Log.e("PocketBaseSync", "Failed to subscribe to $collection: ${response.status}")
             }
         } catch (e: Exception) {
-            remoteLogger.e("PocketBaseSync", "Exception during multiplexed subscription: ${e.message}")
+            Log.e("PocketBaseSync", "Exception during subscription to $collection: ${e.message}")
         }
     }
 
@@ -173,9 +172,9 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to batch_payloads...")
                                             coroutineScope {
-                                                launch { subscribeMultiplexed(clientId) }
+                                                launch { subscribe(clientId, "batch_payloads") }
                                             }
                                         }
                                     } else {
@@ -592,9 +591,9 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to pantry_items...")
                                             coroutineScope {
-                                                launch { subscribeMultiplexed(clientId) }
+                                                launch { subscribe(clientId, "pantry_items") }
                                             }
                                         }
                                     } else {
@@ -685,9 +684,9 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Subscribing to past_items...")
                                             coroutineScope {
-                                                launch { subscribeMultiplexed(clientId) }
+                                                launch { subscribe(clientId, "past_items") }
                                             }
                                         }
                                     } else {
