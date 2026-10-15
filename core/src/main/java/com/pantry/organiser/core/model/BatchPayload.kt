@@ -60,16 +60,43 @@ object BatchPayloadSerializer : KSerializer<BatchPayload> {
         var parsedItems: List<ScannedItem> = emptyList()
 
         val itemsElement = obj["items"]
-        if (itemsElement is JsonArray) {
-            val first = itemsElement.firstOrNull()
-            if (first is JsonPrimitive && first.isString) {
-                parsedItemIds = itemsElement.mapNotNull { it.jsonPrimitive.contentOrNull }
-            } else if (first is JsonObject) {
-                parsedItems = try {
-                    json.decodeFromJsonElement<List<ScannedItem>>(itemsElement)
-                } catch (_: Exception) {
-                    emptyList()
+        
+        try {
+            if (itemsElement is JsonArray) {
+                if (itemsElement.isNotEmpty()) {
+                    val first = itemsElement.first()
+                    if (first is JsonPrimitive && first.isString) {
+                        parsedItemIds = itemsElement.mapNotNull { it.jsonPrimitive.contentOrNull }
+                    } else if (first is JsonObject) {
+                        parsedItems = try {
+                            json.decodeFromJsonElement<List<ScannedItem>>(itemsElement)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
                 }
+            } else if (itemsElement is JsonPrimitive && itemsElement.isString) {
+                // PocketBase sometimes serializes array columns as a single JSON string "[\"id1\"]"
+                val stringContent = itemsElement.content
+                if (stringContent.startsWith("[") && stringContent.endsWith("]")) {
+                    val parsedArray = json.parseToJsonElement(stringContent)
+                    if (parsedArray is JsonArray) {
+                        val first = parsedArray.firstOrNull()
+                        if (first is JsonPrimitive && first.isString) {
+                            parsedItemIds = parsedArray.mapNotNull { it.jsonPrimitive.contentOrNull }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback empty if parsing utterly fails
+        }
+        
+        // Final fallback if `itemIds` array was provided instead of `items`
+        if (parsedItemIds.isEmpty() && parsedItems.isEmpty()) {
+            val idsElement = obj["itemIds"]
+            if (idsElement is JsonArray) {
+                 parsedItemIds = idsElement.mapNotNull { it.jsonPrimitive.contentOrNull }
             }
         }
 
