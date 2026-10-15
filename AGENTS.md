@@ -9,6 +9,10 @@ If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\
 2. The version must be bumped *with the creation of the branch* (before any code changes are introduced on the branch).
 3. Assign a new version to the app(s) concerned by the change. Because the project consists of multiple separate apps (`:app`, `:app-dashboard`, `:app-ingestion`), you must increase the version on the specific app(s) affected by the feature/fix. If the change is common (affecting core models/shared logic), all apps must see a version increase.
 4. Commit the whole thing as one big PR (one branch commit).
+5. Create tags for release according to this rule:
+5.1 For 1 app that's changing, the tag should look like this: VX.XX-{appName}
+5.2 For more than 1 app change, the tag should look like this: VX.XX-{appName1},VX.XX{appName2}
+5.3 Do not include the core or main app when creating the tags, only the ingestion and dashboard apps
 
 ## Agent skills
 
