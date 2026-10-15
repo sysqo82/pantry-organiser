@@ -60,6 +60,11 @@ class SyncQueueRepository @Inject constructor(
         Log.d("SyncQueue", "Processing batch with ${itemIds.size} itemIds and ${scannedItems.size} legacy items")
         val items = mutableListOf<SyncQueueItem>()
 
+        if (itemIds.isEmpty() && scannedItems.isEmpty()) {
+            Log.d("SyncQueue", "Payload contains no itemIds and no legacy items. Skipping.")
+            return@coroutineScope
+        }
+
         val fetchedPantryItems = try {
             syncService.fetchPantryItems(payload.pantryId)
         } catch (_: Exception) {

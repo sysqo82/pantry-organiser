@@ -181,9 +181,10 @@ class PocketBaseSyncService(
                                     } else {
                                         val event = json.decodeFromJsonElement<RealtimeEvent>(element)
                                         if (event.action == "create" || event.action == "update") {
+                                            remoteLogger.d("PocketBaseSync", "RAW BATCH PAYLOAD JSON: ${event.record}")
                                             val payload = json.decodeFromJsonElement<BatchPayload>(event.record)
                                             if (payload.pantryId == pantryId) {
-                                                remoteLogger.d("PocketBaseSync", "Received batch payload for pantryId ${payload.pantryId} with ${payload.safeItems.size} items")
+                                                remoteLogger.d("PocketBaseSync", "Parsed payload: safeItemIds=${payload.safeItemIds.size}, safeItems=${payload.safeItems.size}")
                                                 emit(payload)
                                             }
                                         }
