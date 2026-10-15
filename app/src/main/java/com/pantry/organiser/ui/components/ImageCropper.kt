@@ -201,7 +201,7 @@ fun ImageCropperDialog(
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(imageDisplayRect, cropRect) {
+                            .pointerInput(Unit) {
                                 detectDragGestures(
                                     onDragStart = { touch ->
                                         activeHandle = detectDragHandle(
