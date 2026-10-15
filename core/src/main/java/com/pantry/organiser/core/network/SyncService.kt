@@ -13,6 +13,7 @@ interface SyncService {
     
     // Inventory Items Sync (Dashboard Curator & Ingestion View)
     suspend fun fetchPantryItems(pantryId: String = "default-pantry"): List<PantryItem>
+    suspend fun fetchPantryItemById(itemId: String): PantryItem?
     fun observePantryItems(pantryId: String = "default-pantry"): Flow<PantryItem>
     suspend fun createPantryItem(item: PantryItem): PantryItem?
     suspend fun updatePantryItem(item: PantryItem): PantryItem?
