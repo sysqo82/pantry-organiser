@@ -244,6 +244,29 @@ class PocketBaseSyncService(
         }
     }
 
+    override suspend fun fetchPantryItemById(itemId: String): PantryItem? {
+        val url = "$baseUrl/api/collections/pantry_items/records/$itemId"
+        return try {
+            val response = client.get(url) {
+                authRepository?.getToken()?.let { token ->
+                    header(HttpHeaders.Authorization, "Bearer $token")
+                }
+            }
+            if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                authRepository?.logout()
+            }
+            if (response.status.isSuccess()) {
+                val pbItem: PocketBasePantryItem = response.body()
+                pbItem.toLocal()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            remoteLogger.e("PocketBaseSync", "Failed to fetch pantry item by ID ($itemId): ${e.message}", e)
+            null
+        }
+    }
+
     private val writeMutex = Mutex()
 
     override suspend fun createPantryItem(item: PantryItem): PantryItem? = writeMutex.withLock {

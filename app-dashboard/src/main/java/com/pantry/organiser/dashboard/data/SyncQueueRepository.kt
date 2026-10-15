@@ -69,7 +69,16 @@ class SyncQueueRepository @Inject constructor(
 
         if (itemIds.isNotEmpty()) {
             itemIds.forEachIndexed { index, itemId ->
-                val pantryItem = itemMap[itemId]
+                var pantryItem = itemMap[itemId]
+                
+                if (pantryItem == null) {
+                    Log.d("SyncQueue", "Item $itemId not found in bulk fetch, trying direct fetch")
+                    pantryItem = try {
+                        syncService.fetchPantryItemById(itemId)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
 
                 // If item is already assigned to a shelf in the pantry, skip queueing it as pending
                 if (pantryItem != null && pantryItem.isAssigned) {
