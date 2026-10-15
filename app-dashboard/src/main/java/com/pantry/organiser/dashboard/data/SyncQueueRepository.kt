@@ -85,12 +85,6 @@ class SyncQueueRepository @Inject constructor(
                     }
                 }
 
-                // If item is already assigned to a shelf in the pantry, skip queueing it as pending
-                if (pantryItem != null && pantryItem.isAssigned) {
-                    Log.d("SyncQueue", "Skipping already assigned item $itemId (${pantryItem.name})")
-                    return@forEachIndexed
-                }
-
                 val correspondingScannedItem = scannedItems.getOrNull(index)
 
                 val barcode = pantryItem?.barcode ?: correspondingScannedItem?.barcode ?: ""
@@ -118,12 +112,7 @@ class SyncQueueRepository @Inject constructor(
         }
         
         if (items.isEmpty() && scannedItems.isNotEmpty()) {
-            val legacyDeferreds = scannedItems.mapNotNull { scannedItem ->
-                if (scannedItem.barcode.isNotBlank() && fetchedPantryItems.any { it.barcode == scannedItem.barcode && it.isAssigned }) {
-                    Log.d("SyncQueue", "Skipping legacy item with assigned barcode ${scannedItem.barcode}")
-                    return@mapNotNull null
-                }
-
+            val legacyDeferreds = scannedItems.map { scannedItem ->
                 async {
                     val needsEnrichment = scannedItem.productName.isBlank() || scannedItem.productName == "Enriching..."
                     val productName: String
