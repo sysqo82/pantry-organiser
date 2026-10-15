@@ -65,7 +65,8 @@ object BatchPayloadSerializer : KSerializer<BatchPayload> {
             if (itemsElement is JsonArray) {
                 if (itemsElement.isNotEmpty()) {
                     val first = itemsElement.first()
-                    if (first is JsonPrimitive && first.isString) {
+                    // Fallback to checking content if isString somehow returns false
+                    if (first is JsonPrimitive && (first.isString || first.contentOrNull != null)) {
                         parsedItemIds = itemsElement.mapNotNull { it.jsonPrimitive.contentOrNull }
                     } else if (first is JsonObject) {
                         parsedItems = try {
@@ -82,7 +83,7 @@ object BatchPayloadSerializer : KSerializer<BatchPayload> {
                     val parsedArray = json.parseToJsonElement(stringContent)
                     if (parsedArray is JsonArray) {
                         val first = parsedArray.firstOrNull()
-                        if (first is JsonPrimitive && first.isString) {
+                        if (first is JsonPrimitive && (first.isString || first.contentOrNull != null)) {
                             parsedItemIds = parsedArray.mapNotNull { it.jsonPrimitive.contentOrNull }
                         }
                     }
