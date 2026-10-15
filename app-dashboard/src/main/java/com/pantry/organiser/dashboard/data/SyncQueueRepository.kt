@@ -60,6 +60,11 @@ class SyncQueueRepository @Inject constructor(
         Log.d("SyncQueue", "Processing batch with ${itemIds.size} itemIds and ${scannedItems.size} legacy items")
         val items = mutableListOf<SyncQueueItem>()
 
+        if (itemIds.isEmpty() && scannedItems.isEmpty()) {
+            Log.d("SyncQueue", "Payload contains no itemIds and no legacy items. Skipping.")
+            return@coroutineScope
+        }
+
         val fetchedPantryItems = try {
             syncService.fetchPantryItems(payload.pantryId)
         } catch (_: Exception) {
@@ -78,12 +83,6 @@ class SyncQueueRepository @Inject constructor(
                     } catch (e: Exception) {
                         null
                     }
-                }
-
-                // If item is already assigned to a shelf in the pantry, skip queueing it as pending
-                if (pantryItem != null && pantryItem.isAssigned) {
-                    Log.d("SyncQueue", "Skipping already assigned item $itemId (${pantryItem.name})")
-                    return@forEachIndexed
                 }
 
                 val correspondingScannedItem = scannedItems.getOrNull(index)
@@ -113,12 +112,7 @@ class SyncQueueRepository @Inject constructor(
         }
         
         if (items.isEmpty() && scannedItems.isNotEmpty()) {
-            val legacyDeferreds = scannedItems.mapNotNull { scannedItem ->
-                if (scannedItem.barcode.isNotBlank() && fetchedPantryItems.any { it.barcode == scannedItem.barcode && it.isAssigned }) {
-                    Log.d("SyncQueue", "Skipping legacy item with assigned barcode ${scannedItem.barcode}")
-                    return@mapNotNull null
-                }
-
+            val legacyDeferreds = scannedItems.map { scannedItem ->
                 async {
                     val needsEnrichment = scannedItem.productName.isBlank() || scannedItem.productName == "Enriching..."
                     val productName: String
