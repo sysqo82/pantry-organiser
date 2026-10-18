@@ -34,26 +34,7 @@ class PantryRepository @Inject constructor(
     init {
         scope.launch {
             try {
-                val rawRemoteItems = syncService.fetchPantryItems()
-                val flagFile = File(context.filesDir, "pantry_pb_shelves_migrated_v2.flag")
-                val needsMigration = !flagFile.exists()
-
-                val remoteItems = rawRemoteItems.map { item ->
-                    var migrated = item
-                    if (needsMigration && migrated.shelfNumber in 1..4) {
-                        val newShelf = 5 - migrated.shelfNumber
-                        Log.i("PantryRepo", "Migrating remote dashboard item shelf for ${migrated.name}: ${migrated.shelfNumber} -> $newShelf")
-                        migrated = migrated.copy(shelfNumber = newShelf)
-                        scope.launch {
-                            syncService.updatePantryItem(migrated)
-                        }
-                    }
-                    migrated
-                }
-                if (needsMigration) {
-                    try { flagFile.createNewFile() } catch (_: Exception) {}
-                }
-
+                val remoteItems = syncService.fetchPantryItems()
                 val remoteIds = remoteItems.map { it.id }.toSet()
 
                 val localItems = pantryDao.getAllItemsOnce()

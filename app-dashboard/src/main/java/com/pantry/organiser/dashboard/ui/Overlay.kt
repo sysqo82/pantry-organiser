@@ -8,8 +8,12 @@ sealed class OverlayContext {
         val syncItem: SyncQueueItem,
         val existingItem: PantryItem? = null,
         val isPastItem: Boolean = false,
-        val suggestedShelf: Pair<Int, Int>? = null
-    ) : OverlayContext()
+        val suggestedShelf: Pair<Int, Int>? = null,
+        val similarExistingItems: List<PantryItem> = emptyList(),
+        val isPastSimilar: Boolean = false
+    ) : OverlayContext() {
+        val similarExistingItem: PantryItem? get() = similarExistingItems.firstOrNull()
+    }
     
     data class ManualEntry(val shelf: Int, val zone: Int) : OverlayContext()
     data class ItemDetail(val item: PantryItem) : OverlayContext()

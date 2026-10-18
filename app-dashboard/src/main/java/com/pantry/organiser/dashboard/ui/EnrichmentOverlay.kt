@@ -10,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +36,10 @@ fun EnrichmentOverlay(
     existingItem: PantryItem?,
     isPastItem: Boolean = false,
     suggestedShelf: Pair<Int, Int>? = null,
+    similarExistingItem: PantryItem? = null,
+    similarExistingItems: List<PantryItem> = emptyList(),
+    isPastSimilar: Boolean = false,
+    pantryItems: List<PantryItem> = emptyList(),
     onSave: (Int, Int, Int, FillLevel) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -95,6 +100,45 @@ fun EnrichmentOverlay(
                     }
                 }
 
+                val matches = if (similarExistingItems.isNotEmpty()) similarExistingItems else listOfNotNull(similarExistingItem)
+                val highlightedShelves = remember(matches) { matches.map { it.shelfNumber to it.zoneIndex }.toSet() }
+                if (matches.isNotEmpty()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Notice",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (isPastSimilar) "Previously owned similar product:" else "Similar product in pantry:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                                matches.take(3).forEach { match ->
+                                    val locationLabel = if (isPastSimilar) "Former Location: ${match.formattedLocation}" else match.formattedLocation
+                                    Text(
+                                        text = "• ${match.name} ($locationLabel)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (isLandscape) {
                     // LANDSCAPE: 2-Column Side-by-Side Content Area
                     Row(
@@ -147,6 +191,9 @@ fun EnrichmentOverlay(
                                         selectedRow = r
                                         selectedCol = c
                                     },
+                                    pantryItems = pantryItems,
+                                    highlightedShelves = highlightedShelves,
+                                    showThumbnails = false,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -184,6 +231,9 @@ fun EnrichmentOverlay(
                                     selectedRow = r
                                     selectedCol = c
                                 },
+                                pantryItems = pantryItems,
+                                highlightedShelves = highlightedShelves,
+                                showThumbnails = false,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }

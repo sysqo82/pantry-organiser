@@ -196,7 +196,7 @@ class PocketBaseSyncServiceTest {
             install(ContentNegotiation) { json() }
             install(HttpTimeout)
         }
-        val mockAuthRepo = mockk<AuthRepository>()
+        val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
         every { mockAuthRepo.getToken() } returns "mock_token"
         val service = PocketBaseSyncService(client, baseUrl, mockAuthRepo)
 
@@ -225,7 +225,7 @@ class PocketBaseSyncServiceTest {
             install(ContentNegotiation) { json() }
             install(HttpTimeout)
         }
-        val mockAuthRepo = mockk<AuthRepository>()
+        val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
         every { mockAuthRepo.getToken() } returns "mock_token"
         val service = PocketBaseSyncService(client, baseUrl, mockAuthRepo)
 

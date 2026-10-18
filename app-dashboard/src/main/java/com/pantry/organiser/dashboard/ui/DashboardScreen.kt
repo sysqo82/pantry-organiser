@@ -100,6 +100,10 @@ fun DashboardScreen(
                     existingItem = overlay.existingItem,
                     isPastItem = overlay.isPastItem,
                     suggestedShelf = overlay.suggestedShelf,
+                    similarExistingItem = overlay.similarExistingItem,
+                    similarExistingItems = overlay.similarExistingItems,
+                    isPastSimilar = overlay.isPastSimilar,
+                    pantryItems = uiState.pantryItems,
                     onSave = { shelf, zone, qty, fill ->
                         viewModel.saveEnrichedItem(overlay.syncItem, overlay.existingItem, shelf, zone, qty, fill, overlay.isPastItem)
                     },
@@ -323,7 +327,7 @@ private fun PantryWorkbenchSection(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                (1..4).forEach { shelfNum ->
+                (1..PantryConstants.TOTAL_SHELVES).forEach { shelfNum ->
                     val itemsOnShelf = groupedByShelf[shelfNum] ?: emptyList()
                     if (itemsOnShelf.isNotEmpty()) {
                         item(key = "shelf_header_$shelfNum") {

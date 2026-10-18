@@ -83,25 +83,7 @@ class PantryRepository @JvmOverloads constructor(
         scope.launch {
             val remotePocketItems = pocketBaseApi.getItems()
             if (remotePocketItems != null) {
-                val flagFile = filesDir?.let { File(it, "pantry_pb_shelves_migrated_v2.flag") }
-                val needsMigration = flagFile != null && !flagFile.exists()
-
-                val remoteItems = remotePocketItems.map { pbItem ->
-                    var localItem = pbItem.toLocal()
-                    if (needsMigration && localItem.shelfNumber in 1..4) {
-                        val migratedShelf = 5 - localItem.shelfNumber
-                        android.util.Log.i("PantryRepository", "Migrating remote PB shelf for ${localItem.name}: ${localItem.shelfNumber} -> $migratedShelf")
-                        localItem = localItem.copy(shelfNumber = migratedShelf)
-                        scope.launch {
-                            pocketBaseApi.updateItem(localItem.id, localItem.toPocketBase())
-                        }
-                    }
-                    localItem
-                }
-                if (needsMigration) {
-                    try { flagFile?.createNewFile() } catch (_: Exception) {}
-                }
-
+                val remoteItems = remotePocketItems.map { it.toLocal() }
                 val remoteIds = remoteItems.map { it.id }.toSet()
                 
                 // Get all local items to identify and remove "ghost" items

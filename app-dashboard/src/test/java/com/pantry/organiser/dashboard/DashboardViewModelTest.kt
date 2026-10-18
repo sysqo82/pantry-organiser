@@ -356,4 +356,38 @@ class DashboardViewModelTest {
 
         coVerify(exactly = 1) { pantryRepository.moveToPastItems(any()) }
     }
+
+    @Test
+    fun `processItem sets similarExistingItem in SyncQueueEnrichment when fuzzy match is found`() = runTest {
+        val existingSugar = PantryItem(
+            id = "sugar1",
+            name = "Sainsbury's Granulated White Sugar",
+            brand = "Sainsbury's",
+            shelfNumber = 2,
+            zoneIndex = 2,
+            barcode = "5012345678901",
+            isAssigned = true
+        )
+        every { pantryRepository.allItems } returns flowOf(listOf(existingSugar))
+
+        val syncItem = SyncQueueItem(
+            id = "sync_1",
+            barcode = "4088123456789",
+            batchId = "batch1",
+            productName = "Aldi Granulated Sugar 1kg",
+            brand = "Aldi"
+        )
+        coEvery { pantryRepository.getItemByBarcode("4088123456789") } returns null
+        coEvery { pantryRepository.getPastItemByBarcode("4088123456789") } returns null
+
+        viewModel.processItem(syncItem)
+
+        val overlay = viewModel.uiState.value.activeOverlay
+        assertTrue(overlay is OverlayContext.SyncQueueEnrichment)
+        val enrichment = overlay as OverlayContext.SyncQueueEnrichment
+        assertFalse(enrichment.isPastItem)
+        assertNull(enrichment.existingItem)
+        assertNotNull(enrichment.similarExistingItem)
+        assertEquals("sugar1", enrichment.similarExistingItem?.id)
+    }
 }
