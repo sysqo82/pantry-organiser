@@ -3,6 +3,7 @@ package com.pantry.organiser.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.core.model.FillLevel
+import com.pantry.organiser.core.model.FuzzyMatchEngine
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.PastItem
@@ -137,13 +138,17 @@ class DashboardViewModel @Inject constructor(
                         isPastItem = true
                     )
                 } else {
+                    val (similarItems, isPastSimilar, suggestedShelf) = resolveFuzzyMatches(item, allItems)
                     // New item: Open Enrichment Overlay so user can select location
                     _uiState.update {
                         it.copy(
                             activeOverlay = OverlayContext.SyncQueueEnrichment(
                                 syncItem = item,
                                 existingItem = null,
-                                isPastItem = false
+                                isPastItem = false,
+                                suggestedShelf = suggestedShelf,
+                                similarExistingItems = similarItems,
+                                isPastSimilar = isPastSimilar
                             )
                         )
                     }
@@ -196,18 +201,52 @@ class DashboardViewModel @Inject constructor(
                         )
                     }
                 } else {
+                    val (similarItems, isPastSimilar, suggestedShelf) = resolveFuzzyMatches(item, allItems)
                     _uiState.update {
                         it.copy(
                             activeOverlay = OverlayContext.SyncQueueEnrichment(
                                 syncItem = item,
                                 existingItem = null,
-                                isPastItem = false
+                                isPastItem = false,
+                                suggestedShelf = suggestedShelf,
+                                similarExistingItems = similarItems,
+                                isPastSimilar = isPastSimilar
                             )
                         )
                     }
                 }
             }
         }
+    }
+
+    private suspend fun resolveFuzzyMatches(item: SyncQueueItem, allActiveItems: List<PantryItem>): Triple<List<PantryItem>, Boolean, Pair<Int, Int>?> {
+        val activeMatches = FuzzyMatchEngine.findAllMatches(
+            scannedProductName = item.productName ?: "",
+            scannedBrand = item.brand,
+            scannedBarcode = item.barcode,
+            pantryItems = allActiveItems.filter { it.isAssigned }
+        )
+
+        if (activeMatches.isNotEmpty()) {
+            return Triple(activeMatches.map { it.matchedItem }, false, null)
+        }
+
+        val pastItems = pantryRepository.pastItems.firstOrNull() ?: emptyList()
+        val pastMatches = FuzzyMatchEngine.findAllMatches(
+            scannedProductName = item.productName ?: "",
+            scannedBrand = item.brand,
+            scannedBarcode = item.barcode,
+            pantryItems = pastItems.map { it.toPantryItem() }
+        )
+
+        if (pastMatches.isNotEmpty()) {
+            val topMatch = pastMatches.first().matchedItem
+            val row = PantryConstants.shelfToRow(topMatch.shelfNumber)
+            val col = (topMatch.zoneIndex - 1).coerceIn(0, 2)
+            return Triple(pastMatches.map { it.matchedItem }, true, row to col)
+        }
+
+        return Triple(emptyList(), false, null)
     }
 
     fun selectItem(item: PantryItem) {

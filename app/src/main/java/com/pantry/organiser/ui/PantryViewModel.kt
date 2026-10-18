@@ -31,8 +31,12 @@ data class PantryUiState(
     val visualSearchSelectedItem: PantryItem? = null,
     val searchQuery: String = "",
     val isSearchingOnTheFly: Boolean = false,
-    val selectedItemSuggestions: List<SmartInventorySuggestion> = emptyList()
-)
+    val selectedItemSuggestions: List<SmartInventorySuggestion> = emptyList(),
+    val similarItemNotices: List<FuzzyMatchResult> = emptyList(),
+    val isPastSimilar: Boolean = false
+) {
+    val similarItemNotice: FuzzyMatchResult? get() = similarItemNotices.firstOrNull()
+}
 
 class PantryViewModel(
     private val repository: PantryRepository,
@@ -590,8 +594,21 @@ class PantryViewModel(
                         sealedCount = if (trackingType == TrackingType.DISCRETE_COUNT) (if (unitsPerPack > 1) 0 else 1) else 0,
                         activeFill = if (trackingType == TrackingType.BULK_LEVEL) FillLevel.FULL else FillLevel.EMPTY
                     )
-                    _uiState.update { it.copy(isLoading = false, pendingNewItem = tempItem) }
-                    // Flag stays true to block other scans while choosing shelf
+                    val activeFuzzyMatches = FuzzyMatchEngine.findAllMatches(
+                        scannedProductName = product.displayProductName ?: "",
+                        scannedBrand = product.brands,
+                        scannedBarcode = trimmedBarcode,
+                        pantryItems = _uiState.value.items
+                    )
+
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            pendingNewItem = tempItem,
+                            similarItemNotices = activeFuzzyMatches
+                        )
+                    }
+                    // Flag stays true to block other scans while choosing shelf or reviewing notice
                 } else {
                     android.util.Log.d("PantryVM", "[DEBUG-SCAN] Product not found on OFF")
                     _uiState.update { it.copy(isLoading = false, error = "Item Not Found (Unknown Product)") }
@@ -627,7 +644,7 @@ class PantryViewModel(
         if (_uiState.value.isReadOnly) {
             // Read-Only mode just highlights the item (Identity Lookup)
             selectItem(item)
-            val label = getCellLabel(PantryConstants.shelfToRow(item.shelfNumber), (item.zoneIndex - 1).coerceIn(0, 2))
+            val label = getCellLabel(PantryConstants.shelfToRow(item.safeShelfNumber), PantryConstants.zoneToCol(item.safeZoneIndex))
             _uiState.update { it.copy(userNotification = "Found: ${item.name} at $label", recognizedItem = item) }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
@@ -662,7 +679,7 @@ class PantryViewModel(
             // Add mode: Increment stock.
             // Note: Data sanity check handles type/multipack re-evaluation on emission.
             addSealedUnit(item)
-            val label = getCellLabel((4 - item.shelfNumber).coerceIn(0, 3), (item.zoneIndex - 1).coerceIn(0, 2))
+            val label = getCellLabel(PantryConstants.shelfToRow(item.safeShelfNumber), PantryConstants.zoneToCol(item.safeZoneIndex))
             _uiState.update { it.copy(userNotification = "Added 1 pack to $label", recognizedItem = item) }
             kotlinx.coroutines.delay(800)
             _uiState.update { it.copy(recognizedItem = null) }
@@ -690,9 +707,19 @@ class PantryViewModel(
         _uiState.update { it.copy(
             pendingNewItem = null, 
             scannedProduct = null,
+            similarItemNotices = emptyList(),
             isScannerVisible = false // Dismiss the scanner overlay
         ) }
         isProcessingScan = false // UNLOCK
+    }
+
+    fun dismissSimilarItemNotice() {
+        _uiState.update { it.copy(similarItemNotices = emptyList(), pendingNewItem = null) }
+        isProcessingScan = false
+    }
+
+    fun proceedWithNewItem() {
+        _uiState.update { it.copy(similarItemNotices = emptyList()) }
     }
 
 

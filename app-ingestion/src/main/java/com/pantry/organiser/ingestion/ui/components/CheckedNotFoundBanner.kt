@@ -1,5 +1,6 @@
 package com.pantry.organiser.ingestion.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,12 +20,22 @@ import com.pantry.organiser.ingestion.CheckedNotFoundItem
 fun CheckedNotFoundBanner(
     info: CheckedNotFoundItem,
     onDismiss: () -> Unit,
+    onViewPhotos: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val hasSimilar = info.similarItems.isNotEmpty()
+    val backgroundColor = if (hasSimilar) Color(0xFFE65100) else Color(0xFFD32F2F)
     Surface(
-        color = Color(0xFFD32F2F),
+        color = backgroundColor,
         shape = RoundedCornerShape(14.dp),
-        modifier = modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .then(
+                if (hasSimilar && onViewPhotos != null) {
+                    Modifier.clickable { onViewPhotos() }
+                } else Modifier
+            )
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -44,18 +55,45 @@ fun CheckedNotFoundBanner(
                 Spacer(Modifier.width(10.dp))
                 Column {
                     Text(
-                        text = "NOT IN PANTRY",
+                        text = if (hasSimilar) {
+                            if (info.isPastSimilar) "PREVIOUSLY OWNED SIMILAR PRODUCT" else "NOT IN PANTRY (SIMILAR PRODUCT FOUND)"
+                        } else "NOT IN PANTRY",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 11.sp,
                         color = Color.White.copy(alpha = 0.9f)
                     )
-                    Text(
-                        text = "${info.productName}${if (!info.brand.isNullOrBlank()) " (${info.brand})" else ""} is not in stock.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    if (hasSimilar) {
+                        val detailsText = if (info.similarItems.size == 1) {
+                            val item = info.similarItems.first()
+                            val loc = if (info.isPastSimilar) "Former Location: ${item.formattedLocation}" else item.formattedLocation
+                            "${item.name} ($loc)"
+                        } else {
+                            val count = info.similarItems.size
+                            val shelvesText = info.similarItems.map { it.formattedLocation }.distinct().joinToString(", ")
+                            if (info.isPastSimilar) "$count similar items previously owned ($shelvesText)" else "$count similar items in stock ($shelvesText)"
+                        }
+                        Text(
+                            text = if (info.isPastSimilar) "Not in stock, but you previously had $detailsText." else "Not found by barcode, but you have $detailsText.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Tap banner to view product photos & details",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "${info.productName}${if (!info.brand.isNullOrBlank()) " (${info.brand})" else ""} is not in stock.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
             IconButton(onClick = onDismiss) {

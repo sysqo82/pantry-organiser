@@ -30,9 +30,11 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Warning
 import com.pantry.organiser.data.OffProduct
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.model.FuzzyMatchResult
 import com.pantry.organiser.core.model.FillLevel
 import com.pantry.organiser.ui.ScannerMode
 import kotlinx.coroutines.delay
@@ -87,6 +89,10 @@ fun ScannerView(
     isReadOnly: Boolean,
     isTablet: Boolean, // Pass role-based identity from screen
 
+    similarItemNotice: FuzzyMatchResult? = null,
+    similarItemNotices: List<FuzzyMatchResult> = emptyList(),
+    onDismissSimilarNotice: () -> Unit = {},
+    onProceedSimilarNotice: () -> Unit = {},
     onSave: (String, String, String, Int, Int, String?, String?, TrackingType) -> Unit,
 
 
@@ -561,9 +567,110 @@ fun ScannerView(
                 }
             }
 
+            // Overlay for Similar Item Notice (Fuzzy Match Warning)
+            AnimatedVisibility(
+                visible = similarItemNotice != null,
+                enter = overlayEnter,
+                exit = overlayExit
+            ) {
+                similarItemNotice?.let { notice ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.85f))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .widthIn(max = 500.dp)
+                                .padding(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Warning,
+                                        contentDescription = "Warning",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Similar Product in Pantry",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Text(
+                                    "You already have a similar product in stock:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        val matches = if (similarItemNotices.isNotEmpty()) similarItemNotices else listOf(notice)
+                                        matches.take(3).forEach { match ->
+                                            Column {
+                                                Text(
+                                                    text = match.matchedItem.name,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = "Location: ${match.matchedItem.formattedLocation}",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = onDismissSimilarNotice,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Cancel / Got It")
+                                    }
+
+                                    Button(
+                                        onClick = onProceedSimilarNotice,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Add as New Item")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Overlay for Location Assignment
             AnimatedVisibility(
-                visible = pendingNewItem != null,
+                visible = pendingNewItem != null && similarItemNotice == null,
                 enter = overlayEnter,
                 exit = overlayExit
             ) {

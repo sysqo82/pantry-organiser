@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.pantry.organiser.ingestion.ui.components.SimilarItemsModal
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -64,11 +65,18 @@ fun IngestionScreen(
     var selectedShelfFilter by remember { mutableStateOf<Int?>(null) }
     var selectedItem by remember { mutableStateOf<PantryItem?>(null) }
     var photoCaptureItem by remember { mutableStateOf<PantryItem?>(null) }
+    var showSimilarModal by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.scannedCheckItem) {
         uiState.scannedCheckItem?.let {
             selectedItem = it
             isGridExpanded = true
+        }
+    }
+
+    LaunchedEffect(uiState.checkedNotFound) {
+        if (uiState.checkedNotFound?.similarItems?.isNotEmpty() == true) {
+            showSimilarModal = true
         }
     }
 
@@ -84,7 +92,8 @@ fun IngestionScreen(
     val filteredItems = remember(selectedItem, selectedCell, selectedShelfFilter, uiState.items) {
         when {
             selectedItem != null -> {
-                uiState.items.filter { it.id == selectedItem!!.id }
+                val matches = uiState.items.filter { it.id == selectedItem!!.id }
+                if (matches.isNotEmpty()) matches else listOf(selectedItem!!)
             }
             selectedCell != null -> {
                 val cell = selectedCell!!
@@ -268,7 +277,8 @@ fun IngestionScreen(
                                                 }
                                             },
                                             pantryItems = uiState.items,
-                                            highlightedItem = selectedItem
+                                            highlightedItem = selectedItem,
+                                            highlightedShelves = uiState.checkedNotFound?.similarItems?.map { it.shelfNumber to it.zoneIndex }?.toSet() ?: emptySet()
                                         )
                                     }
                                 }
@@ -293,7 +303,7 @@ fun IngestionScreen(
                                             label = { Text("All (${uiState.items.size})") }
                                         )
                                     }
-                                    items((4 downTo 1).toList()) { shelf ->
+                                    items((PantryConstants.TOTAL_SHELVES downTo 1).toList()) { shelf ->
                                         val count = uiState.items.count { it.shelfNumber == shelf }
                                         val isHighlightedShelf = selectedItem?.shelfNumber == shelf
                                         FilterChip(
@@ -324,11 +334,22 @@ fun IngestionScreen(
                         }
                     }
 
-                    if (uiState.checkedNotFound != null) {
+                    if (uiState.checkedNotFound != null && !showSimilarModal) {
                         Spacer(modifier = Modifier.height(8.dp))
                         CheckedNotFoundBanner(
                             info = uiState.checkedNotFound!!,
-                            onDismiss = { viewModel.clearCheckedNotFound() }
+                            onDismiss = {
+                                showSimilarModal = false
+                                viewModel.clearCheckedNotFound()
+                            },
+                            onViewPhotos = { showSimilarModal = true }
+                        )
+                    }
+
+                    if (showSimilarModal && uiState.checkedNotFound != null && uiState.checkedNotFound!!.similarItems.isNotEmpty()) {
+                        SimilarItemsModal(
+                            info = uiState.checkedNotFound!!,
+                            onDismiss = { showSimilarModal = false }
                         )
                     }
 
@@ -411,6 +432,7 @@ fun IngestionScreen(
 
                         items(filteredItems, key = { it.id }) { item ->
                             val isItemHighlighted = selectedItem?.id == item.id
+                            val isSimilarMatch = uiState.checkedNotFound?.similarItems?.any { it.id == item.id } == true
 
                             Surface(
                                 modifier = Modifier
@@ -431,9 +453,16 @@ fun IngestionScreen(
                                         }
                                     },
                                 shape = RoundedCornerShape(12.dp),
-                                color = if (isItemHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                border = if (isItemHighlighted) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                                color = when {
+                                    isItemHighlighted -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                    isSimilarMatch -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                },
+                                border = when {
+                                    isItemHighlighted -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                    isSimilarMatch -> BorderStroke(2.dp, MaterialTheme.colorScheme.tertiary)
+                                    else -> null
+                                }
                             ) {
                                 ListItem(
                                     leadingContent = {

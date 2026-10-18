@@ -191,8 +191,8 @@ class IngestionViewModelTest {
 
         coVerify { syncService.dispatchBatch(any()) }
         assertEquals("default-pantry", slot.captured.pantryId)
-        assertEquals(1, slot.captured.safeItemIds.size)
-        assertEquals("pb_id_123", slot.captured.safeItemIds[0])
+        assertEquals(1, slot.captured.safeItems.size)
+        assertEquals("5000123456789", slot.captured.safeItems[0].barcode)
 
         val state = viewModel.uiState.value
         assertTrue(state.scannedItems.isEmpty())
@@ -295,5 +295,39 @@ class IngestionViewModelTest {
 
         val itemNames = viewModel.uiState.value.items.map { it.name }
         assertEquals(listOf("Zucchini", "Bananas", "Apples", "Avocado"), itemNames)
+    }
+
+    @Test
+    fun `scanning unknown barcode in CHECK mode sets CheckedNotFoundItem with similarItem when fuzzy match exists`() = runTest {
+        val existingSugar = PantryItem(
+            id = "sugar1",
+            name = "Sainsbury's Granulated White Sugar",
+            brand = "Sainsbury's",
+            shelfNumber = 2,
+            zoneIndex = 2,
+            barcode = "5012345678901",
+            isAssigned = true
+        )
+        coEvery { syncService.fetchPantryItems(any()) } returns listOf(existingSugar)
+
+        val aldiProduct = OffProduct(
+            productName = "Aldi Granulated Sugar 1kg",
+            brands = "Aldi"
+        )
+        coEvery { offRepository.getProduct("4088123456789") } returns aldiProduct
+
+        viewModel.setMode(IngestionMode.CHECK)
+        barcodeFlow.emit("4088123456789")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNull(state.scannedCheckItem)
+        assertNotNull(state.checkedNotFound)
+        assertEquals("4088123456789", state.checkedNotFound?.barcode)
+        assertTrue(state.checkedNotFound?.similarItems?.isNotEmpty() == true)
+        assertEquals("sugar1", state.checkedNotFound?.similarItems?.first()?.id)
+        // Verify inventory list is filtered to show only matching item
+        assertEquals(1, state.items.size)
+        assertEquals("sugar1", state.items.first().id)
     }
 }

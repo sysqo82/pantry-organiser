@@ -7,9 +7,11 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pantry.organiser.core.model.BatchPayload
+import com.pantry.organiser.core.model.FuzzyMatchEngine
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.ScannedItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.model.toPantryItem
 import com.pantry.organiser.core.network.OpenFoodFactsRepository
 import com.pantry.organiser.core.network.SyncService
 import com.pantry.organiser.ingestion.scanner.ContinuousScanner
@@ -31,7 +33,9 @@ data class CheckedNotFoundItem(
     val barcode: String,
     val productName: String,
     val brand: String? = null,
-    val imageUrl: String? = null
+    val imageUrl: String? = null,
+    val similarItems: List<PantryItem> = emptyList(),
+    val isPastSimilar: Boolean = false
 )
 
 data class IngestionUiState(
@@ -206,17 +210,52 @@ class IngestionViewModel @Inject constructor(
                     val brand = offProduct?.displayBrands
                     val imageUrl = offProduct?.imageUrl
 
+                    val activeFuzzyMatches = FuzzyMatchEngine.findAllMatches(
+                        scannedProductName = name,
+                        scannedBrand = brand,
+                        scannedBarcode = barcode,
+                        pantryItems = serverItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }
+                    )
+
+                    val (similarItemList, isPastSimilar) = if (activeFuzzyMatches.isNotEmpty()) {
+                        Pair(activeFuzzyMatches.map { it.matchedItem }, false)
+                    } else {
+                        val remotePastItems = try { syncService.fetchPastItems() } catch (_: Exception) { emptyList() }
+                        val pastFuzzyMatches = FuzzyMatchEngine.findAllMatches(
+                            scannedProductName = name,
+                            scannedBrand = brand,
+                            scannedBarcode = barcode,
+                            pantryItems = remotePastItems.map { it.toPantryItem() }
+                        )
+                        Pair(pastFuzzyMatches.map { it.matchedItem }, pastFuzzyMatches.isNotEmpty())
+                    }
+
                     val notFoundInfo = CheckedNotFoundItem(
                         barcode = barcode,
                         productName = name,
                         brand = brand,
-                        imageUrl = imageUrl
+                        imageUrl = imageUrl,
+                        similarItems = similarItemList,
+                        isPastSimilar = isPastSimilar
                     )
                     _uiState.update { state ->
+                        val assignedItems = (state.allPantryItems + serverItems)
+                            .filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }
+                            .distinctBy { it.id }
+                            .sortPantryItems()
+
+                        val filteredList = if (similarItemList.isNotEmpty()) {
+                            assignedItems.filter { item -> similarItemList.any { it.id == item.id } }
+                        } else {
+                            assignedItems
+                        }
+
                         state.copy(
                             mode = IngestionMode.HOME,
                             scannedCheckItem = null,
-                            checkedNotFound = notFoundInfo
+                            checkedNotFound = notFoundInfo,
+                            items = filteredList,
+                            allPantryItems = (state.allPantryItems + serverItems).distinctBy { it.id }
                         )
                     }
                 }
@@ -286,114 +325,46 @@ class IngestionViewModel @Inject constructor(
     }
 
     fun setMode(mode: IngestionMode) {
-        _uiState.update { it.copy(mode = mode) }
+        _uiState.update { state ->
+            val assignedItems = state.allPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
+            state.copy(mode = mode, checkedNotFound = null, items = assignedItems)
+        }
     }
 
     fun sendToPantry() {
         viewModelScope.launch {
             _uiState.update { it.copy(isSending = true) }
             val currentScanned = _uiState.value.scannedItems
-            val createdItemIds = mutableListOf<String>()
 
-            // Fetch existing server items to check for duplicate barcodes
-            val existingServerItems = try {
-                syncService.fetchPantryItems(_uiState.value.pantryId)
-            } catch (e: Exception) {
-                emptyList()
-            }
-
-            // Create unassigned pantry_item records on PocketBase ONLY when user clicks "Send to Pantry"
-            currentScanned.forEach { item ->
-                val inferredUnits = PantryItem.inferUnitsPerPack(item.productName, item.quantity)
-                val determinedType = PantryItem.determineTrackingType(item.productName, quantity = item.quantity, unitsPerPack = inferredUnits)
-                val initialSealed = if (determinedType == TrackingType.DISCRETE_COUNT) {
-                    if (inferredUnits > 1) 0 else 1
-                } else 0
-
-                val trimmedBarcode = item.barcode.trim()
-                val existingMatch = existingServerItems.find { existing ->
-                    val existingBc = existing.barcode?.trim()
-                    existingBc != null && existingBc.equals(trimmedBarcode, ignoreCase = true)
-                }
-
-                if (existingMatch != null) {
-                    val shouldUpdateName = existingMatch.name.isBlank() || existingMatch.name.equals("Unknown Product", ignoreCase = true)
-                    val updatedName = if (shouldUpdateName && item.productName.isNotBlank() && !item.productName.equals("Unknown Product", ignoreCase = true)) {
-                        item.productName
-                    } else {
-                        existingMatch.name
-                    }
-
-                    val updatedItem = existingMatch.copy(
-                        name = updatedName,
-                        brand = item.brand.takeIf { !it.isNullOrBlank() } ?: existingMatch.brand,
-                        packageQuantity = item.quantity.takeIf { !it.isNullOrBlank() } ?: existingMatch.packageQuantity,
-                        imageUrl = item.imageUrl.takeIf { !it.isNullOrBlank() } ?: existingMatch.imageUrl,
-                        apiImageUrl = item.imageUrl.takeIf { !it.isNullOrBlank() } ?: existingMatch.apiImageUrl,
-                        updatedAt = System.currentTimeMillis()
-                    )
-
-                    try {
-                        val updated = syncService.updatePantryItem(updatedItem)
-                        if (updated != null && updated.id.isNotBlank()) {
-                            Log.d("IngestionVM", "Updated existing pantry item on PB for barcode ${item.barcode}: ${updated.id}")
-                            createdItemIds.add(updated.id)
-                        } else {
-                            createdItemIds.add(existingMatch.id)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("IngestionVM", "Failed to update existing pantry item for ${item.barcode}: ${e.message}")
-                        createdItemIds.add(existingMatch.id)
-                    }
-                } else {
-                    val newPantryItem = PantryItem(
-                        id = "",
-                        name = item.productName.ifBlank { "Unknown Product" },
-                        barcode = item.barcode,
-                        brand = item.brand,
-                        packageQuantity = item.quantity,
-                        imageUrl = item.imageUrl,
-                        apiImageUrl = item.imageUrl,
-                        shelfNumber = 1,
-                        zoneIndex = 1,
-                        trackingType = determinedType,
-                        sealedCount = initialSealed,
-                        unitsPerPack = inferredUnits,
-                        activeCount = inferredUnits,
-                        isAssigned = false, // Unassigned
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-
-                    try {
-                        val created = syncService.createPantryItem(newPantryItem)
-                        if (created != null && created.id.isNotBlank() && !created.id.startsWith("local_")) {
-                            Log.d("IngestionVM", "Successfully created pantry item on PB for ${item.barcode}: ${created.id}")
-                            createdItemIds.add(created.id)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("IngestionVM", "Failed to create pantry item on PB for ${item.barcode}: ${e.message}")
-                    }
-                }
-            }
-
-            Log.d("IngestionVM", "Sending batch_payload with ${createdItemIds.size} itemIds: $createdItemIds")
             val payload = BatchPayload(
                 pantryId = _uiState.value.pantryId,
-                itemIds = createdItemIds,
-                items = emptyList()
+                itemIds = emptyList(),
+                items = currentScanned
             )
+
             try {
+                Log.d("IngestionVM", "Dispatching batch_payload with ${currentScanned.size} items: $currentScanned")
                 syncService.dispatchBatch(payload)
-                _uiState.update { it.copy(scannedItems = emptyList(), createdPantryItems = emptyList(), isSending = false, mode = IngestionMode.HOME) }
+                _uiState.update {
+                    it.copy(
+                        scannedItems = emptyList(),
+                        createdPantryItems = emptyList(),
+                        isSending = false,
+                        mode = IngestionMode.HOME
+                    )
+                }
             } catch (e: Exception) {
+                Log.e("IngestionVM", "Failed to dispatch batch: ${e.message}", e)
                 _uiState.update { it.copy(isSending = false) }
             }
         }
     }
 
     fun clearCheckedNotFound() {
-        _uiState.update { it.copy(checkedNotFound = null) }
+        _uiState.update { state ->
+            val assignedItems = state.allPantryItems.filter { it.isAssigned && it.hasStock && it.sealedCount >= 0 }.sortPantryItems()
+            state.copy(checkedNotFound = null, items = assignedItems)
+        }
     }
 
     fun startScanner(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {

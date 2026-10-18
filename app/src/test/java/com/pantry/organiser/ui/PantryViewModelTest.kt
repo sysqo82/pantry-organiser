@@ -609,6 +609,43 @@ class PantryViewModelTest {
         assertEquals(item, viewModel.uiState.value.visualSearchSelectedItem)
     }
 
+    @Test
+    fun `scanBarcode populates similarItemNotice when fuzzy match is found in pantry`() = runTest {
+        val existingSugar = PantryItem(
+            id = "sugar1",
+            name = "Sainsbury's Granulated White Sugar",
+            brand = "Sainsbury's",
+            packageQuantity = "1kg",
+            shelfNumber = 2,
+            zoneIndex = 2,
+            barcode = "5012345678901",
+            isAssigned = true
+        )
+        every { repository.allItems } returns flowOf(listOf(existingSugar))
+        val vm = PantryViewModel(repository, offRepository)
+
+        val aldiProduct = OffProduct(
+            productName = "Aldi Granulated Sugar 1kg",
+            brands = "Aldi",
+            weight = "1kg"
+        )
+        coEvery { repository.getItemByBarcode(any()) } returns null
+        coEvery { offRepository.getProduct("4088123456789") } returns aldiProduct
+
+        vm.showScanner(ScannerMode.RESTOCK)
+        vm.scanBarcode("4088123456789")
+
+        val state = vm.uiState.value
+        assertNotNull(state.similarItemNotice)
+        assertEquals("sugar1", state.similarItemNotice?.matchedItem?.id)
+        assertNotNull(state.pendingNewItem)
+        assertEquals("Aldi Granulated Sugar 1kg", state.pendingNewItem?.name)
+
+        // Dismiss notice
+        vm.dismissSimilarItemNotice()
+        assertNull(vm.uiState.value.similarItemNotice)
+        assertNull(vm.uiState.value.pendingNewItem)
+    }
 }
 
 

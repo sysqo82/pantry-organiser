@@ -30,6 +30,8 @@ fun PantryShelfGrid(
     onCellClick: (Int, Int) -> Unit,
     pantryItems: List<PantryItem> = emptyList(),
     highlightedItem: PantryItem? = null,
+    highlightedShelves: Set<Pair<Int, Int>> = emptySet(),
+    showThumbnails: Boolean = true,
     onSelectItem: ((PantryItem) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -51,12 +53,15 @@ fun PantryShelfGrid(
                     val label = "S$shelfNumber-${PantryConstants.getZoneLabel(zoneIndex)}"
 
                     val isSelected = selectedCell?.first == row && selectedCell?.second == col
-                    val isHighlightedLocation = highlightedItem != null &&
+                    val isHighlightedLocation = (highlightedItem != null &&
                             highlightedItem.shelfNumber == shelfNumber &&
-                            highlightedItem.zoneIndex == zoneIndex
+                            highlightedItem.zoneIndex == zoneIndex) ||
+                            highlightedShelves.contains(shelfNumber to zoneIndex)
 
                     val itemsInCell = pantryItems.filter { it.shelfNumber == shelfNumber && it.zoneIndex == zoneIndex }
-                    val displayItem = highlightedItem.takeIf { isHighlightedLocation } ?: itemsInCell.firstOrNull()
+                    val displayItem = if (showThumbnails) {
+                        highlightedItem.takeIf { isHighlightedLocation } ?: itemsInCell.firstOrNull()
+                    } else null
 
                     ShelfCell(
                         label = label,

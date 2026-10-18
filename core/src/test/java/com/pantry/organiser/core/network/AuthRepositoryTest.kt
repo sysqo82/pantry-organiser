@@ -23,16 +23,23 @@ class AuthRepositoryTest {
 
     private val baseUrl = "https://mock.pocketbase"
 
+    companion object {
+        @org.junit.BeforeClass
+        @JvmStatic
+        fun setupClass() {
+            mockkStatic(android.util.Log::class)
+            every { android.util.Log.d(any<String>(), any<String>()) } returns 0
+            every { android.util.Log.e(any<String>(), any<String>()) } returns 0
+            every { android.util.Log.e(any<String>(), any<String>(), any()) } returns 0
+            every { android.util.Log.i(any<String>(), any<String>()) } returns 0
+            every { android.util.Log.w(any<String>(), any<String>()) } returns 0
+            every { android.util.Log.w(any<String>(), any<String>(), any()) } returns 0
+            every { android.util.Log.v(any<String>(), any<String>()) } returns 0
+        }
+    }
+
     @Before
     fun setup() {
-        mockkStatic(android.util.Log::class)
-        every { android.util.Log.d(any<String>(), any<String>()) } returns 0
-        every { android.util.Log.e(any<String>(), any<String>()) } returns 0
-        every { android.util.Log.e(any<String>(), any<String>(), any()) } returns 0
-        every { android.util.Log.i(any<String>(), any<String>()) } returns 0
-        every { android.util.Log.w(any<String>(), any<String>()) } returns 0
-        every { android.util.Log.v(any<String>(), any<String>()) } returns 0
-
         mockContext = mockk()
         mockPrefs = mockk()
         mockEditor = mockk(relaxed = true)
@@ -43,7 +50,7 @@ class AuthRepositoryTest {
     
     @org.junit.After
     fun tearDown() {
-        unmockkStatic(android.util.Log::class)
+        // Keep Log mocked across async dispatcher coroutines
     }
 
     private fun createRepository(mockEngine: MockEngine): AuthRepository {

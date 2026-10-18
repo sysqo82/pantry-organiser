@@ -74,6 +74,7 @@ data class PantryItem(
 
     val safeShelfNumber: Int get() = shelfNumber.coerceIn(1, 5)
     val safeZoneIndex: Int get() = zoneIndex.coerceIn(1, 3)
+    val formattedLocation: String get() = "Shelf $safeShelfNumber-${PantryConstants.getZoneLabel(safeZoneIndex)}"
 
     val totalDisplayCount: Int get() = when (trackingType) {
         TrackingType.DISCRETE_COUNT -> {
