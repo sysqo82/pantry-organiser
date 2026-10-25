@@ -38,6 +38,7 @@ abstract class IngestionModule {
                         maxRequestsPerHost = 20
                     }
                     dispatcher(dispatcher)
+                    pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
                 }
             }
             install(ContentNegotiation) {
