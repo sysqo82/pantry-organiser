@@ -161,7 +161,11 @@ class PocketBaseSyncService(
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}", e)
+                            if (isStreamReset(e)) {
+                                remoteLogger.i("PocketBaseSync", "Realtime stream reset by server or proxy for $pantryId; reconnecting...")
+                            } else {
+                                remoteLogger.w("PocketBaseSync", "Error reading line from realtime for $pantryId: ${e.message}", e)
+                            }
                             null
                         } ?: break
 
@@ -196,16 +200,17 @@ class PocketBaseSyncService(
                         }
                     }
                 }
-                remoteLogger.w("PocketBaseSync", "Realtime stream closed for $pantryId. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.i("PocketBaseSync", "Realtime stream closed for $pantryId. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isStreamReset = isStreamReset(e)
                 val isNetworkDown = e is UnknownHostException ||
                                     e is ConnectException ||
                                     e is SocketException ||
                                     e.cause is UnknownHostException
-                if (isNetworkDown) {
-                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                if (isNetworkDown || isStreamReset) {
+                    remoteLogger.i("PocketBaseSync", "Realtime stream reset or host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
                     remoteLogger.e("PocketBaseSync", "Connection error for $pantryId: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
@@ -581,7 +586,11 @@ class PocketBaseSyncService(
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime pantry_items: ${e.message}", e)
+                            if (isStreamReset(e)) {
+                                remoteLogger.i("PocketBaseSync", "Realtime pantry_items stream reset by server or proxy; reconnecting...")
+                            } else {
+                                remoteLogger.w("PocketBaseSync", "Error reading line from realtime pantry_items: ${e.message}", e)
+                            }
                             null
                         } ?: break
 
@@ -618,16 +627,17 @@ class PocketBaseSyncService(
                         }
                     }
                 }
-                remoteLogger.w("PocketBaseSync", "Realtime pantry_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.i("PocketBaseSync", "Realtime pantry_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isStreamReset = isStreamReset(e)
                 val isNetworkDown = e is UnknownHostException ||
                                     e is ConnectException ||
                                     e is SocketException ||
                                     e.cause is UnknownHostException
-                if (isNetworkDown) {
-                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                if (isNetworkDown || isStreamReset) {
+                    remoteLogger.i("PocketBaseSync", "Realtime pantry_items stream reset or host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
                     remoteLogger.e("PocketBaseSync", "Connection or stream error in observePantryItems: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
@@ -674,7 +684,11 @@ class PocketBaseSyncService(
                             channel.readUTF8Line()
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            remoteLogger.w("PocketBaseSync", "Error reading line from realtime past_items: ${e.message}", e)
+                            if (isStreamReset(e)) {
+                                remoteLogger.i("PocketBaseSync", "Realtime past_items stream reset by server or proxy; reconnecting...")
+                            } else {
+                                remoteLogger.w("PocketBaseSync", "Error reading line from realtime past_items: ${e.message}", e)
+                            }
                             null
                         } ?: break
 
@@ -706,16 +720,17 @@ class PocketBaseSyncService(
                         }
                     }
                 }
-                remoteLogger.w("PocketBaseSync", "Realtime past_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
+                remoteLogger.i("PocketBaseSync", "Realtime past_items stream closed. Reconnecting in ${retryDelay / 1000}s...")
                 delay(retryDelay)
             } catch (e: Exception) {
                 if (e is CancellationException || !currentCoroutineContext().isActive) throw e
+                val isStreamReset = isStreamReset(e)
                 val isNetworkDown = e is UnknownHostException ||
                                     e is ConnectException ||
                                     e is SocketException ||
                                     e.cause is UnknownHostException
-                if (isNetworkDown) {
-                    remoteLogger.w("PocketBaseSync", "Host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
+                if (isNetworkDown || isStreamReset) {
+                    remoteLogger.i("PocketBaseSync", "Realtime past_items stream reset or host unreachable (${e.message}). Retrying in ${retryDelay / 1000}s...")
                 } else {
                     remoteLogger.e("PocketBaseSync", "Connection or stream error in observePastItems: ${e.message}. Retrying in ${retryDelay / 1000}s...", e)
                 }
@@ -729,5 +744,18 @@ class PocketBaseSyncService(
                 delay(10000)
             }
         }
+    }
+
+    private fun isStreamReset(e: Throwable): Boolean {
+        val msg = e.message
+        if (msg != null && (msg.contains("stream was reset", ignoreCase = true) || msg.contains("StreamResetException", ignoreCase = true))) {
+            return true
+        }
+        val causeMsg = e.cause?.message
+        if (causeMsg != null && (causeMsg.contains("stream was reset", ignoreCase = true) || causeMsg.contains("StreamResetException", ignoreCase = true))) {
+            return true
+        }
+        val causeClass = e.cause?.let { it::class.java.simpleName }
+        return e::class.java.simpleName == "StreamResetException" || causeClass == "StreamResetException"
     }
 }
