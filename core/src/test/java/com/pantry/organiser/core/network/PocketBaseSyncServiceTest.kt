@@ -34,6 +34,7 @@ class PocketBaseSyncServiceTest {
         every { Log.e(any<String>(), any<String>(), any()) } returns 0
         every { Log.i(any<String>(), any<String>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<String>(), any()) } returns 0
         every { Log.v(any<String>(), any<String>()) } returns 0
     }
 
@@ -203,6 +204,11 @@ class PocketBaseSyncServiceTest {
         val job = launch {
             service.observeBatches(pantryId).collect {}
         }
+        testScheduler.runCurrent()
+        val start = System.currentTimeMillis()
+        while (callCount == 0 && System.currentTimeMillis() - start < 2000) {
+            Thread.sleep(10)
+        }
         testScheduler.advanceTimeBy(1000)
         job.cancel()
 
@@ -231,6 +237,11 @@ class PocketBaseSyncServiceTest {
 
         val job = launch {
             service.observePantryItems(pantryId).collect {}
+        }
+        testScheduler.runCurrent()
+        val start = System.currentTimeMillis()
+        while (callCount == 0 && System.currentTimeMillis() - start < 2000) {
+            Thread.sleep(10)
         }
         testScheduler.advanceTimeBy(1000)
         job.cancel()

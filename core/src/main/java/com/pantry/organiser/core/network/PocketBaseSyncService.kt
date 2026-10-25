@@ -28,7 +28,7 @@ class PocketBaseSyncService(
     private val baseUrl: String,
     private val authRepository: AuthRepository? = null
 ) : SyncService {
-    private val remoteLogger = RemoteLogger(client, baseUrl, authRepository)
+    private val remoteLogger = RemoteLogger(client)
     
     private val json = Json {
         ignoreUnknownKeys = true
