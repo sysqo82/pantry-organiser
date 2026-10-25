@@ -10,9 +10,26 @@ plugins {
 val localProperties = Properties()
 val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
-    localProperties.load(localPropertiesFile.inputStream())
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
+
+val envProperties = Properties()
+val envFile = rootProject.file(".env")
+if (envFile.exists()) {
+    envFile.inputStream().use { envProperties.load(it) }
+}
+
+fun getProp(key: String): String? {
+    return System.getenv(key)
+        ?: envProperties.getProperty(key)
+        ?: localProperties.getProperty(key)
+        ?: localProperties.getProperty(key.lowercase().replace('_', '.'))
+}
+
 val customPocketBaseUrl = localProperties.getProperty("pocketbase.url")
+val resolvedTelemetryUrl = getProp("TELEMETRY_URL") ?: "https://telemetry.lockpc.co.uk"
+val resolvedTelemetryKey = getProp("TELEMETRY_KEY") ?: ""
+val resolvedTelemetryService = getProp("TELEMETRY_SERVICE") ?: "pantry-organiser"
 
 android {
     namespace = "com.pantry.organiser.core"
@@ -40,10 +57,18 @@ android {
         release {
             val url = "https://pantry.lockpc.co.uk"
             buildConfigField("String", "POCKETBASE_URL", "\"$url\"")
+            buildConfigField("String", "TELEMETRY_URL", "\"$resolvedTelemetryUrl\"")
+            buildConfigField("String", "TELEMETRY_KEY", "\"$resolvedTelemetryKey\"")
+            buildConfigField("String", "TELEMETRY_SERVICE", "\"$resolvedTelemetryService\"")
+            buildConfigField("String", "ENVIRONMENT", "\"production\"")
         }
         debug {
             val url = customPocketBaseUrl ?: "https://dev-pantry.lockpc.co.uk"
             buildConfigField("String", "POCKETBASE_URL", "\"$url\"")
+            buildConfigField("String", "TELEMETRY_URL", "\"$resolvedTelemetryUrl\"")
+            buildConfigField("String", "TELEMETRY_KEY", "\"$resolvedTelemetryKey\"")
+            buildConfigField("String", "TELEMETRY_SERVICE", "\"$resolvedTelemetryService\"")
+            buildConfigField("String", "ENVIRONMENT", "\"debug\"")
         }
     }
 }
