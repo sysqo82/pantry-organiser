@@ -66,6 +66,10 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     val pbShelf = shelfNumber.coerceIn(1, 5)
     val pbZone = zoneIndex.coerceIn(1, 3)
 
+    // PocketBase record IDs must be exactly 15 lowercase alphanumeric characters
+    val isValidPbId = id.isNotBlank() && Regex("^[a-z0-9]{15}$").matches(id)
+    val pbId = if (isValidPbId) id else null
+
     // OFF Image URL goes to image_url and api_image_url (NEVER PocketBase file URLs)
     val validOffUrl = (imageUrl ?: apiImageUrl)?.takeIf { 
         it.isNotBlank() && (it.startsWith("http://") || it.startsWith("https://")) && !it.contains("/api/files/") 
@@ -79,7 +83,7 @@ fun PantryItem.toPocketBase(): PocketBasePantryItem {
     val validLocalUri = localImageUri?.takeIf { it.isNotBlank() } ?: ""
 
     return PocketBasePantryItem(
-        id = id.takeIf { it.isNotBlank() && !it.startsWith("local_") },
+        id = pbId,
         name = name.ifBlank { "Unknown Product" },
         barcode = barcode?.takeIf { it.isNotBlank() } ?: "",
         brand = brand?.takeIf { it.isNotBlank() } ?: "",
