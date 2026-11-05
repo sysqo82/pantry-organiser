@@ -14,8 +14,8 @@ android {
         applicationId = "com.pantry.organiser"
         minSdk = 24
         targetSdk = 35
-        versionCode = 19
-        versionName = "2.17"
+        versionCode = 21
+        versionName = "2.19"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
