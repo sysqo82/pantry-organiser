@@ -177,7 +177,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Realtime client connection established", mapOf("client_id" to clientId))
                                             coroutineScope {
                                                 launch { subscribeMultiplexed(clientId) }
                                             }
@@ -602,7 +602,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Realtime client connection established", mapOf("client_id" to clientId))
                                             coroutineScope {
                                                 launch { subscribeMultiplexed(clientId) }
                                             }
@@ -700,7 +700,7 @@ class PocketBaseSyncService(
                                     if (element is JsonObject && element.containsKey("clientId")) {
                                         val clientId = element["clientId"]?.jsonPrimitive?.content
                                         if (clientId != null) {
-                                            remoteLogger.d("PocketBaseSync", "Received clientId: $clientId. Multiplex subscribing...")
+                                            remoteLogger.d("PocketBaseSync", "Realtime client connection established", mapOf("client_id" to clientId))
                                             coroutineScope {
                                                 launch { subscribeMultiplexed(clientId) }
                                             }

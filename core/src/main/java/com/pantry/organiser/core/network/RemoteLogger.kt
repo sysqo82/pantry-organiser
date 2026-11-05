@@ -88,28 +88,28 @@ class RemoteLogger(
         }
     }
 
-    fun d(tag: String, message: String) {
+    fun d(tag: String, message: String, metadata: Map<String, String>? = null) {
         safeLog { Log.d(tag, message) }
-        sendLog(tag, message, "debug")
+        sendLog(tag, message, "debug", metadata = metadata)
     }
 
-    fun i(tag: String, message: String) {
+    fun i(tag: String, message: String, metadata: Map<String, String>? = null) {
         safeLog { Log.i(tag, message) }
-        sendLog(tag, message, "info")
+        sendLog(tag, message, "info", metadata = metadata)
     }
 
-    fun w(tag: String, message: String, t: Throwable? = null) {
+    fun w(tag: String, message: String, t: Throwable? = null, metadata: Map<String, String>? = null) {
         val stackTrace = t?.stackTraceToString()
         val fullMessage = if (stackTrace != null) "$message\n$stackTrace" else message
         safeLog { Log.w(tag, fullMessage) }
-        sendLog(tag, message, "warn", t)
+        sendLog(tag, message, "warn", t, metadata = metadata)
     }
 
-    fun e(tag: String, message: String, t: Throwable? = null) {
+    fun e(tag: String, message: String, t: Throwable? = null, metadata: Map<String, String>? = null) {
         val stackTrace = t?.stackTraceToString()
         val fullMessage = if (stackTrace != null) "$message\n$stackTrace" else message
         safeLog { Log.e(tag, fullMessage) }
-        sendLog(tag, message, "error", t)
+        sendLog(tag, message, "error", t, metadata = metadata)
     }
 
     private fun cleanStacktrace(rawStacktrace: String): String {
@@ -130,7 +130,7 @@ class RemoteLogger(
         }.joinToString("\n")
     }
 
-    private fun sendLog(tag: String, message: String, level: String, throwable: Throwable? = null) {
+    private fun sendLog(tag: String, message: String, level: String, throwable: Throwable? = null, metadata: Map<String, String>? = null) {
         if (telemetryKey.isBlank() || telemetryUrl.isBlank()) {
             return
         }
@@ -161,6 +161,7 @@ class RemoteLogger(
                 "device_id" to deviceId,
                 "build_type" to if (BuildConfig.DEBUG) "debug" else "release"
             ),
+            metadata = metadata,
             timestamp = formatIsoDate(Date())
         )
 
