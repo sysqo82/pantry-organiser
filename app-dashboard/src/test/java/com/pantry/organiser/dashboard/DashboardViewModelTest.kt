@@ -53,6 +53,23 @@ class DashboardViewModelTest {
     }
 
     @Test
+    fun `pantry syncs with the server after each login and not while logged out`() = runTest {
+        clearMocks(pantryRepository, answers = false)
+        val loggedIn = kotlinx.coroutines.flow.MutableStateFlow(false)
+        every { authRepository.isLoggedIn } returns loggedIn
+
+        DashboardViewModel(syncQueueRepository, pantryRepository, openFoodFactsProber, authRepository)
+        verify(exactly = 0) { pantryRepository.reconcileWithServer() }
+
+        loggedIn.value = true
+        verify(exactly = 1) { pantryRepository.reconcileWithServer() }
+
+        loggedIn.value = false
+        loggedIn.value = true
+        verify(exactly = 2) { pantryRepository.reconcileWithServer() }
+    }
+
+    @Test
     fun `saveEnrichedItem saves bulk staple item like salt with active stock and reserve count`() = runTest {
         val syncItem = SyncQueueItem(
             id = "batch1_item1",

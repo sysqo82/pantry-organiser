@@ -54,6 +54,14 @@ class DashboardViewModel @Inject constructor(
         authRepository.logout()
     }
 
+    fun onAppEntered() {
+        authRepository.onAppEntered()
+    }
+
+    fun onAppLeft() {
+        authRepository.onAppLeft()
+    }
+
     init {
         viewModelScope.launch {
             combine(
@@ -78,6 +86,13 @@ class DashboardViewModel @Inject constructor(
                     _uiState.update { it.copy(activeOverlay = null) }
                 }
             }.collect()
+        }
+
+        // The server can only be read once logged in, so sync after every login.
+        viewModelScope.launch {
+            isLoggedIn.collect { loggedIn ->
+                if (loggedIn) pantryRepository.reconcileWithServer()
+            }
         }
     }
 

@@ -52,7 +52,7 @@ class PocketBaseSyncService(
             }
             Log.d("PocketBaseSync", "Batch dispatched successfully. Status: ${response.status}")
             if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                authRepository?.logout()
+                authRepository?.onRequestRejected()
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (e: Exception) { "No error body" }
@@ -115,7 +115,7 @@ class PocketBaseSyncService(
                 }
             }
             if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                authRepository?.logout()
+                authRepository?.onRequestRejected()
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -146,7 +146,7 @@ class PocketBaseSyncService(
                     }
                 }.execute { response ->
                     if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -236,7 +236,7 @@ class PocketBaseSyncService(
                 parameter("perPage", 500)
             }
             if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                authRepository?.logout()
+                authRepository?.onRequestRejected()
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -260,7 +260,7 @@ class PocketBaseSyncService(
                 }
             }
             if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                authRepository?.logout()
+                authRepository?.onRequestRejected()
             }
             if (response.status.isSuccess()) {
                 val pbItem: PocketBasePantryItem = response.body()
@@ -306,7 +306,7 @@ class PocketBaseSyncService(
                     return createdLocal
                 } else {
                     if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     Log.e("PocketBaseSync", "Create attempt $attempt failed (${httpResponse.status}): $responseText")
                 }
@@ -353,7 +353,7 @@ class PocketBaseSyncService(
                     return updatedLocal
                 } else {
                     if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     Log.e("PocketBaseSync", "Update attempt $attempt failed (${httpResponse.status}): $responseText")
                 }
@@ -429,12 +429,12 @@ class PocketBaseSyncService(
                         val patchedResponse: PocketBasePantryItem = patchResponse.body()
                         return@withLock patchedResponse.toLocal().copy(localImageUrl = hostedCustomUrl)
                     } else if (patchResponse.status == HttpStatusCode.Unauthorized || patchResponse.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     delay(250)
                     return@withLock finalItem
                 } else if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
-                    authRepository?.logout()
+                    authRepository?.onRequestRejected()
                 }
             } catch (e: Exception) {
                 lastException = e
@@ -457,7 +457,7 @@ class PocketBaseSyncService(
                     }
                 }
                 if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                    authRepository?.logout()
+                    authRepository?.onRequestRejected()
                 }
                 val success = response.status.isSuccess()
                 if (success) {
@@ -481,7 +481,7 @@ class PocketBaseSyncService(
                 parameter("perPage", 500)
             }
             if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                authRepository?.logout()
+                authRepository?.onRequestRejected()
             }
             if (!response.status.isSuccess()) {
                 val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -519,7 +519,7 @@ class PocketBaseSyncService(
                     delay(250)
                     return createdLocal
                 } else if (httpResponse.status == HttpStatusCode.Unauthorized || httpResponse.status == HttpStatusCode.Forbidden) {
-                    authRepository?.logout()
+                    authRepository?.onRequestRejected()
                 }
             } catch (e: Exception) {
                 lastException = e
@@ -541,7 +541,7 @@ class PocketBaseSyncService(
                     }
                 }
                 if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                    authRepository?.logout()
+                    authRepository?.onRequestRejected()
                 }
                 val success = response.status.isSuccess()
                 if (success) {
@@ -571,7 +571,7 @@ class PocketBaseSyncService(
                     }
                 }.execute { response ->
                     if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }
@@ -669,7 +669,7 @@ class PocketBaseSyncService(
                     }
                 }.execute { response ->
                     if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
-                        authRepository?.logout()
+                        authRepository?.onRequestRejected()
                     }
                     if (!response.status.isSuccess()) {
                         val errorBody = try { response.bodyAsText() } catch (_: Exception) { "" }

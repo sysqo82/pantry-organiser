@@ -45,6 +45,7 @@ import com.pantry.organiser.core.model.InventorySuggestionEngine
 import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.ui.LogoutButton
 import com.pantry.organiser.ingestion.ui.components.CheckedNotFoundBanner
 import com.pantry.organiser.ingestion.FeedbackEffect
 import com.pantry.organiser.ingestion.IngestionMode
@@ -235,10 +236,13 @@ fun IngestionScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
-                                Icon(
-                                    imageVector = if (isGridExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Toggle Grid"
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    LogoutButton(onConfirmLogout = { viewModel.logout() })
+                                    Icon(
+                                        imageVector = if (isGridExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Toggle Grid"
+                                    )
+                                }
                             }
 
                             AnimatedVisibility(visible = isGridExpanded) {
