@@ -28,6 +28,7 @@ import com.pantry.organiser.core.model.PantryConstants
 import com.pantry.organiser.core.model.PantryItem
 import com.pantry.organiser.core.model.PastItem
 import com.pantry.organiser.core.model.TrackingType
+import com.pantry.organiser.core.ui.LogoutButton
 import com.pantry.organiser.dashboard.DashboardViewModel
 import com.pantry.organiser.dashboard.data.SyncQueueItem
 import com.pantry.organiser.dashboard.ui.components.EditItemBottomSheet
@@ -86,7 +87,8 @@ fun DashboardScreen(
                 onRestock = { item -> viewModel.restockItem(item) },
                 onUpdateFillLevel = { item, fillLevel -> viewModel.updateFillLevel(item, fillLevel) },
                 onClearPendingItem = { viewModel.clearPendingItem(it) },
-                onClearAllPending = { viewModel.clearAllPendingItems() }
+                onClearAllPending = { viewModel.clearAllPendingItems() },
+                onLogout = { viewModel.logout() }
             )
         }
     }
@@ -154,6 +156,7 @@ fun DashboardLayout(
     onUpdateFillLevel: (PantryItem, FillLevel) -> Unit,
     onClearPendingItem: (SyncQueueItem) -> Unit = {},
     onClearAllPending: () -> Unit = {},
+    onLogout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val configuration = LocalConfiguration.current
@@ -180,7 +183,8 @@ fun DashboardLayout(
                     onSelectItem = onSelectItem,
                     onConsume = onConsume,
                     onRestock = onRestock,
-                    onUpdateFillLevel = onUpdateFillLevel
+                    onUpdateFillLevel = onUpdateFillLevel,
+                    onLogout = onLogout
                 )
             }
 
@@ -230,7 +234,8 @@ fun DashboardLayout(
                     onSelectItem = onSelectItem,
                     onConsume = onConsume,
                     onRestock = onRestock,
-                    onUpdateFillLevel = onUpdateFillLevel
+                    onUpdateFillLevel = onUpdateFillLevel,
+                    onLogout = onLogout
                 )
             } else {
                 ShoppingIntakeSection(
@@ -254,6 +259,7 @@ private fun PantryWorkbenchSection(
     onConsume: (PantryItem) -> Unit,
     onRestock: (PantryItem) -> Unit,
     onUpdateFillLevel: (PantryItem, FillLevel) -> Unit,
+    onLogout: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var searchQuery by remember { mutableStateOf("") }
@@ -313,6 +319,8 @@ private fun PantryWorkbenchSection(
                 onClick = { sortBy = if (sortBy == "SHELF") "NAME" else "SHELF" },
                 label = { Text(if (sortBy == "SHELF") "By Shelf" else "By Name") }
             )
+
+            LogoutButton(onConfirmLogout = onLogout)
         }
 
         Spacer(Modifier.height(10.dp))

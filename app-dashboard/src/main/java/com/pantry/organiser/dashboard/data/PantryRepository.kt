@@ -31,7 +31,7 @@ class PantryRepository @Inject constructor(
 
     private var observeJob: Job? = null
 
-    init {
+    fun reconcileWithServer() {
         scope.launch {
             try {
                 val remoteItems = syncService.fetchPantryItems()

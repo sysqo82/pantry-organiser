@@ -13,6 +13,7 @@ If I ask you to use a skill, you can find them in the `D:\D backup\My Documents\
 5.1 For 1 app that's changing, the tag should look like this: VX.XX-{appName}
 5.2 For more than 1 app change, the tag should look like this: VX.XX-{appName1},VX.XX{appName2}
 5.3 Do not include the core or main app when creating the tags, only the ingestion and dashboard apps
+5.4 Create the tag only after the PR has been merged, on that PR's merge commit on `main`, and before generating the GitHub release notes. Never tag a branch commit before the merge, because the tag would not contain the merge commit and "Generate release notes" would leave that PR out.
 
 ## Agent skills
 

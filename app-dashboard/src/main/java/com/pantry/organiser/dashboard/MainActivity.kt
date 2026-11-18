@@ -58,6 +58,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        viewModel.onAppEntered()
         doorSensorManager.startListening()
     }
 
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        viewModel.onAppLeft()
         doorSensorManager.stopListening()
     }
 

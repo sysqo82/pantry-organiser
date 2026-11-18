@@ -76,6 +76,14 @@ class IngestionViewModel @Inject constructor(
         authRepository.logout()
     }
 
+    fun onAppEntered() {
+        authRepository.onAppEntered()
+    }
+
+    fun onAppLeft() {
+        authRepository.onAppLeft()
+    }
+
     private var realtimeSyncJob: Job? = null
 
     init {
@@ -87,7 +95,8 @@ class IngestionViewModel @Inject constructor(
     }
 
     fun startRealtimeSync() {
-        if (realtimeSyncJob?.isActive == true) return
+        // Without a session the first load fails, and an active job would block the retry after login.
+        if (!isLoggedIn.value || realtimeSyncJob?.isActive == true) return
         
         Log.d("IngestionVM", "Starting realtime sync")
         

@@ -75,6 +75,31 @@ class PocketBaseSyncServiceTest {
     }
 
     @Test
+    fun `rejected dispatch asks auth repository to verify the session instead of logging out`() = runTest {
+        val mockEngine = MockEngine { _ ->
+            respond(
+                content = "{}",
+                status = HttpStatusCode.Forbidden,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = HttpClient(mockEngine) {
+            install(ContentNegotiation) { json() }
+            install(HttpTimeout)
+        }
+        val mockAuthRepo = mockk<AuthRepository>(relaxed = true)
+        every { mockAuthRepo.getToken() } returns "mock_token"
+        val service = PocketBaseSyncService(client, baseUrl, mockAuthRepo)
+
+        runCatching {
+            service.dispatchBatch(BatchPayload(pantryId = pantryId, items = listOf(ScannedItem("123456789"))))
+        }
+
+        coVerify(exactly = 1) { mockAuthRepo.onRequestRejected() }
+        verify(exactly = 0) { mockAuthRepo.logout() }
+    }
+
+    @Test
     fun `observeUpdates performs handshake and emits payloads`() = runTest {
         val clientId = "test-client-id"
         val jsonPayload = """{"pantryId":"$pantryId","items":[{"barcode":"987654321","timestamp":1000}],"timestamp":2000}"""

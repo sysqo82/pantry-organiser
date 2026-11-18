@@ -219,6 +219,29 @@ class IngestionViewModelTest {
     }
 
     @Test
+    fun `startRealtimeSync waits for login and loads items once logged in`() = runTest {
+        val loggedIn = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val authRepository = mockk<com.pantry.organiser.core.network.AuthRepository>(relaxed = true)
+        every { authRepository.isLoggedIn } returns loggedIn
+        coEvery { syncService.fetchPantryItems("default-pantry") } returns listOf(
+            PantryItem(id = "1", name = "Sweetcorn", barcode = "100", shelfNumber = 4, zoneIndex = 2, isAssigned = true)
+        )
+        every { syncService.observePantryItems("default-pantry") } returns MutableSharedFlow()
+        val vm = IngestionViewModel(scanner, feedbackController, syncService, offRepository, authRepository)
+
+        vm.startRealtimeSync()
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify(exactly = 0) { syncService.fetchPantryItems(any()) }
+
+        loggedIn.value = true
+        vm.startRealtimeSync()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Sweetcorn", vm.uiState.value.items.single().name)
+        vm.stopRealtimeSync()
+    }
+
+    @Test
     fun `startRealtimeSync fetches initial items and observes updates`() = runTest {
         val initialItems = listOf(
             PantryItem(id = "1", name = "Sweetcorn", barcode = "100", shelfNumber = 4, zoneIndex = 2, isAssigned = true)
