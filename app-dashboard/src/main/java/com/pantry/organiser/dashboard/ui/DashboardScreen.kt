@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -696,22 +697,28 @@ private fun WorkbenchItemRow(
             } else {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilledIconButton(
                         onClick = { onConsume(item) },
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        modifier = Modifier.size(28.dp)
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color(0xFFC62828),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Remove, contentDescription = "Decrease", modifier = Modifier.size(22.dp))
                     }
 
                     FilledIconButton(
                         onClick = { onRestock(item) },
-                        colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.size(28.dp)
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color(0xFF2E7D32),
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier.size(40.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Add, contentDescription = "Increase", modifier = Modifier.size(22.dp))
                     }
                 }
             }
